@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model PaymentRecord {
+  id                    String        @id @default(cuid())
+  reference             String        @unique
+  amount                String
+  recipient             String
+  splToken              String
+  status                PaymentStatus @default(PENDING)
+  signature             String?
+  loyaltyProgramAddress String?
+  loyaltyProgramName    String?
+  loyaltyDiscount       String        @default("0")
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@map("payment_records")
+}
+
+model LoyaltyProgram {
+  id                 String   @id @default(cuid())
+  creator            String
+  programPublicKey   String
+  /// @encrypted
+  programSecretKey   String
+  signature          String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  authorityPublicKey String
+  /// @encrypted
+  authoritySecretKey String
+}
+
+model LoyaltyPass {
+  id             String   @id @default(cuid())
+  programAddress String
+  recipient      String
+  passPublicKey  String
+  /// @encrypted
+  passPrivateKey String
+  signature      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model User {
+  id            String   @id @default(cuid())
+  walletAddress String   @unique
+  email         String?
+  name          String?
+  bio           String?
+  avatar        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
