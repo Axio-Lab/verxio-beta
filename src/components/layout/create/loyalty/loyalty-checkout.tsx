@@ -16,7 +16,7 @@ import { createLoyaltyProgram, initializeVerxio } from "@/app/actions/verxio";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { signerIdentity, generateSigner } from '@metaplex-foundation/umi'
 import { useSolanaWallets, } from "@privy-io/react-auth/solana";
-import { createPrivySigner } from "@/lib/utils";
+// import { createPrivySigner } from "@/lib/utils";
 import { uint8ArrayToBase58String } from "@/lib/utils";
 import { getVerxioConfig } from "@/app/actions/loyalty";
 import { saveLoyaltyProgram } from "@/app/actions/loyalty";
@@ -78,7 +78,7 @@ export const LoyaltyCheckoutCard = ({
     return null;
   }
 
-  const userSigner = createPrivySigner(wallet, userWallet);
+  // const userSigner = createPrivySigner(wallet, userWallet);
 
 
   // Handle countdown and redirect

@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { CloseButton } from '@/components/ui/close-button';
 import { Gift, ExternalLink, Copy, ArrowLeft } from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import "react-toastify/dist/ReactToastify.css";
@@ -156,6 +155,10 @@ export default function LoyaltyProgramDetailPage() {
     try {
       // Get Verxio configuration from server
       const config = await getVerxioConfig();
+      if (!config.rpcEndpoint || !config.privateKey) {
+        toast.error('Failed to get Verxio configuration');
+        return;
+      }
       const initResult = await initializeVerxio(user.wallet.address, config.rpcEndpoint, config.privateKey);
       if (!initResult.success || !initResult.context) {
         toast.error('Failed to initialize Verxio program');

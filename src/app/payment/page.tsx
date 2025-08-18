@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { CreditCard, Check } from 'lucide-react';
 import { Tiles } from '@/components/layout/backgroundTiles';
@@ -20,7 +20,7 @@ interface PaymentData {
   paymentId: string;
 }
 
-export default function PayPage() {
+function PaymentContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -211,5 +211,24 @@ export default function PayPage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function PayPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black relative overflow-hidden">
+        <Tiles rows={50} cols={50} tileSize="md" />
+        <div className="relative z-10 flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <VerxioLoaderWhite size="lg" />
+            <p className="text-white mt-4 text-lg">Loading Payment...</p>
+            <p className="text-zinc-400 text-sm mt-2">Please wait while we prepare your payment</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <PaymentContent />
+    </Suspense>
   );
 } 
