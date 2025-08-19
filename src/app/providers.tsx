@@ -9,7 +9,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}
             config={{
 
-                loginMethods: ['google', 'email', 'wallet'],
+                loginMethods: ['google', 'email'],
                 appearance: {
                     theme: '#ffffff',
                     accentColor: '#000000',

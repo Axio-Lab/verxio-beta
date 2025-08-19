@@ -16,7 +16,7 @@ export const AuroraHero = () => {
           Beta Now Live
         </span>
         <h1 className="max-w-3xl bg-gradient-to-br from-white to-gray-400 bg-clip-text text-center text-3xl font-medium leading-tight text-transparent sm:text-5xl sm:leading-tight md:text-7xl md:leading-tight">
-          Add Rewards to every customer experience
+          Add Loyalty Rewards to your checkout experiences
         </h1>
         <p className="my-6 max-w-xl text-center text-base leading-relaxed text-gray-300 md:text-lg md:leading-relaxed">
           Transform your checkouts with native customer rewards and loyalty programs.

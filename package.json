@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
-    "start": "next start",
+    "build": "npm run prisma generate --no-engine && next build",
+    "start": "npm run prisma migrate deploy && next start",
     "lint": "next lint"
   },
   "dependencies": {
