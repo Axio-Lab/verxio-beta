@@ -1,6 +1,5 @@
 'use client';
 
-// import { usePrivy } from '@privy-io/react-auth';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

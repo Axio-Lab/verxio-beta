@@ -64,7 +64,7 @@ export default function LoyaltyPasses() {
   };
 
   const getExplorerUrl = (address: string) => {
-    return `https://explorer.solana.com/address/${address}?cluster=devnet`;
+    return `https://explorer.solana.com/address/${address}`;
   };
 
   if (isLoading) {

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Copy, Check } from "lucide-react";
+import { Loader2, Copy, Check, Clock } from "lucide-react";
 import { QRCodeSVG } from 'qrcode.react';
 import { VerxioLoaderWhite } from "@/components/ui/verxio-loader-white";
 import { CloseButton } from "@/components/ui/close-button";
@@ -40,10 +40,15 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [countdown, setCountdown] = useState(5);
   const [copied, setCopied] = useState(false);
+  const [expirationCountdown, setExpirationCountdown] = useState(300); // 5 minutes in seconds
+  const [isExpired, setIsExpired] = useState(false);
+  const [expirationTime, setExpirationTime] = useState<number>(0);
   const router = useRouter();
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const expirationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isPollingActive = useRef(true);
   const routerRef = useRef(router);
+  const paymentReferenceRef = useRef<string>('');
 
   // Update router ref when router changes
   useEffect(() => {
@@ -59,17 +64,107 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
         toast.success("Payment link copied!", {
           position: "top-right",
           autoClose: 3000,
-          // theme: "black",
         });
         setTimeout(() => setCopied(false), 2000);
       } catch (err) {
         toast.error("Failed to copy link", {
           position: "top-right",
           autoClose: 3000,
-          // theme: "dark",
         });
       }
     }
+  };
+
+  const startExpirationTimer = useCallback(() => {
+    if (expirationIntervalRef.current) {
+      clearInterval(expirationIntervalRef.current);
+    }
+
+    // Set expiration time to 5 minutes from now
+    const now = Date.now();
+    const expiresAt = now + (5 * 60 * 1000); // 5 minutes in milliseconds
+    setExpirationTime(expiresAt);
+    const interval = setInterval(() => {
+      const currentTime = Date.now();
+      const timeLeft = Math.max(0, Math.ceil((expiresAt - currentTime) / 1000));
+      setExpirationCountdown(timeLeft);
+              if (timeLeft <= 0) {
+          // Payment expired, update status to CANCELLED
+          handlePaymentExpiration();
+          clearInterval(interval);
+          expirationIntervalRef.current = null;
+        }
+    }, 1000);
+
+    expirationIntervalRef.current = interval;
+  }, []);
+
+  const handlePaymentExpiration = async () => {
+
+    // Get reference from ref first, fallback to paymentData
+    const reference = paymentReferenceRef.current || paymentData?.reference;
+    
+    if (!reference) {
+      console.error('No payment reference available for expiration!');
+      toast.error('Payment reference not found', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      // Still redirect even if we can't update status
+      setTimeout(() => {
+        routerRef.current.push('/dashboard');
+      }, 3000);
+      return;
+    }
+    
+    try {
+      // Update payment status to CANCELLED BEFORE changing any state
+      const response = await fetch(`/api/payment/${reference}/status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'CANCELLED'
+        }),
+      });
+
+      if (response.ok) {
+        toast.success('Payment link expired and cancelled', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+      } else {
+        console.error('Failed to update expired payment status');
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        toast.error('Failed to update payment status', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating expired payment status:', error);
+      toast.error('Error updating payment status', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    }
+
+    // Only after API call is complete, update the UI state
+    setIsExpired(true);
+    stopPolling();
+
+    // Redirect to dashboard after 3 seconds
+    setTimeout(() => {
+      routerRef.current.push('/dashboard');
+    }, 3000);
+  };
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   const startPaymentMonitoring = useCallback(async (payment: PaymentData) => {    
@@ -100,11 +195,15 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
           const result: VerificationResult = await response.json();
           
           if (result.verified) {
-            // console.log('Payment completed!', result);
             setVerificationStatus('completed');
             setVerificationResult(result);
             isPollingActive.current = false;
             clearInterval(interval);
+            
+            // Stop expiration timer when payment is completed
+            if (expirationIntervalRef.current) {
+              clearInterval(expirationIntervalRef.current);
+            }
             
             // Payment verification completed successfully
             
@@ -142,12 +241,27 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
+    if (expirationIntervalRef.current) {
+      clearInterval(expirationIntervalRef.current);
+      expirationIntervalRef.current = null;
+    }
   }, []);
 
   const handleClose = async () => {
+    // Get reference from ref first, fallback to paymentData
+    const reference = paymentReferenceRef.current || paymentData?.reference;
+    
+    if (!reference) {
+      console.error('No payment reference available for close!');
+      // Still redirect even if we can't update status
+      stopPolling();
+      routerRef.current.push('/create/payment');
+      return;
+    }
+    
     try {
       // Update payment status to CANCELLED
-      const response = await fetch(`/api/payment/${paymentData?.reference}/status`, {
+      const response = await fetch(`/api/payment/${reference}/status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -158,7 +272,6 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
       });
 
       if (response.ok) {
-        console.log('Payment status updated to CANCELLED');
       } else {
         console.error('Failed to update payment status');
       }
@@ -185,9 +298,17 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
         const data = await response.json();
         setPaymentData(data);
         
+        // Store reference in ref to prevent it from becoming undefined
+        if (data && data.reference) {
+          paymentReferenceRef.current = data.reference;
+        }
+        
         setIsLoading(false);
         
         if (data) {
+          // Start expiration timer immediately
+          startExpirationTimer();
+          
           // Immediate check for payments that might have been made while page was loading
           setTimeout(() => {
             startPaymentMonitoring(data);
@@ -209,9 +330,35 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
+      if (expirationIntervalRef.current) {
+        clearInterval(expirationIntervalRef.current);
+        expirationIntervalRef.current = null;
+      }
       isPollingActive.current = false;
     };
   }, [params]); // Remove startPaymentMonitoring from dependencies
+
+  // Handle tab visibility changes to check expiration when tab becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && expirationTime > 0) {
+        const currentTime = Date.now();
+        const timeLeft = Math.max(0, Math.ceil((expirationTime - currentTime) / 1000));
+        
+        setExpirationCountdown(timeLeft);
+        
+        if (timeLeft <= 0 && !isExpired) {
+          handlePaymentExpiration();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [expirationTime, isExpired]);
 
   if (isLoading) {
     return (
@@ -255,6 +402,46 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
             Go Back
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (isExpired) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center px-4 pt-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md mx-auto"
+        >
+          <div className="bg-black border border-red-500/30 p-6 max-w-md w-full rounded-xl relative overflow-hidden">
+            <div className="relative">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center space-y-4"
+              >
+                <div className="w-16 h-16 bg-red-500/20 border border-red-500/30 rounded-full flex items-center justify-center mx-auto">
+                  <Clock className="w-8 h-8 text-red-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white">Payment Link Expired</h3>
+                <p className="text-white/80">This payment link has expired and is no longer valid.</p>
+                
+                <div className="p-4 bg-red-500/10 rounded-lg border border-red-500/20">
+                  <p className="text-red-400 text-sm">
+                    Payment links expire after 5 minutes for security reasons.
+                  </p>
+                </div>
+                
+                <div className="pt-4">
+                  <p className="text-zinc-400 text-sm mt-2">
+                    Redirecting to dashboard in 3 seconds...
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -332,6 +519,16 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
                 <div className="text-center mb-6">
                   <h2 className="text-2xl font-bold text-white mb-2">Waiting for Payment</h2>
                   <p className="text-zinc-400 text-sm">Scan the QR code to complete your payment</p>
+                </div>
+
+                {/* Expiration Timer */}
+                <div className="p-2 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                  <div className="flex items-center justify-center space-x-2">
+                    <span className="text-orange-400 text-xs font-medium">Payment link expires in</span>
+                    <span className="text-lg font-bold text-orange-400 font-mono">
+                      {formatTime(expirationCountdown)}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-6">

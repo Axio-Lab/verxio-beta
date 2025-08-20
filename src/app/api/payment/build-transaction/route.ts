@@ -11,6 +11,7 @@ import {
   getMint,
 } from "@solana/spl-token";
 import { USDC_MINT } from "@/lib/utils";
+import { getVerxioConfig } from "@/app/actions/loyalty";
 
 // Treasury wallet address (you can set this in environment variables)
 const TREASURY_WALLET = process.env.TREASURY_WALLET!;
@@ -19,6 +20,7 @@ const TREASURY_FEE_PERCENTAGE = 0.005; // 0.5%
 export async function POST(request: NextRequest) {
   try {
     const { reference, amount, recipient, userWallet } = await request.json();
+    const { rpcEndpoint } = await getVerxioConfig();
 
     if (!reference || !amount || !recipient || !userWallet) {
       return NextResponse.json(
@@ -27,8 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const RPC_ENDPOINT = `${process.env.RPC_URL}?api-key=${process.env.HELIUS_API_KEY}`;
-    const connection = new Connection(RPC_ENDPOINT, 'confirmed');
+    const connection = new Connection(rpcEndpoint, 'confirmed');
     const tokenMint = new PublicKey(USDC_MINT);
 
     const paymentAmount = parseFloat(amount);
@@ -116,13 +117,13 @@ export async function POST(request: NextRequest) {
       requireAllSignatures: false,
       verifySignatures: false,
     });
-
+    
     return NextResponse.json({
       success: true,
       transaction: serializedTransaction.toString('base64'),
       instructions: transaction.instructions.length,
       connection: {
-        endpoint: RPC_ENDPOINT,
+        endpoint: rpcEndpoint,
         commitment: "confirmed"
       }
     });

@@ -331,6 +331,7 @@ export const checkUserLoyaltyProgramMembership = async (userWallet: string, loya
                 loyaltyProgram: {
                   address: loyaltyProgramAddress,
                   tiers: programDetails.programDetails?.tiers,
+                  pointsPerAction: programDetails.programDetails?.pointsPerAction,
                   name: programDetails.programDetails?.name 
                 }
               }
@@ -363,5 +364,52 @@ export const checkUserLoyaltyProgramMembership = async (userWallet: string, loya
   } catch (error) {
     console.error('Error checking loyalty program membership:', error);
     return { success: false, error: 'Failed to check loyalty program membership' };
+  }
+}
+
+export const getLoyaltyProgramByAddress = async (programAddress: string) => {
+  try {
+    // First, get the loyalty program from our database
+    const loyaltyProgram = await prisma.loyaltyProgram.findFirst({
+      where: {
+        programPublicKey: programAddress
+      },
+      select: {
+        creator: true,
+        programPublicKey: true
+      }
+    });
+
+    if (!loyaltyProgram) {
+      return { success: false, error: 'Loyalty program not found in database' };
+    }
+
+    // Get program details from the blockchain
+    const programDetails = await getLoyaltyProgramDetails(
+      loyaltyProgram.creator,
+      programAddress
+    );
+
+    if (!programDetails.success) {
+      return { success: false, error: 'Failed to fetch program details from blockchain' };
+    }
+
+    // Return formatted program details
+    return {
+      success: true,
+      data: {
+        address: programAddress,
+        creator: loyaltyProgram.creator,
+        uri: programDetails.programDetails?.uri,
+        members: programDetails.programDetails?.numMinted,
+        name: programDetails.programDetails?.name,
+        tiers: programDetails.programDetails?.tiers || [],
+        pointsPerAction: programDetails.programDetails?.pointsPerAction || {}
+      }
+    };
+
+  } catch (error) {
+    console.error('Error fetching loyalty program by address:', error);
+    return { success: false, error: 'Failed to fetch loyalty program details' };
   }
 }

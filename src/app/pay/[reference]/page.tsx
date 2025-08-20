@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { toast, ToastContainer } from "react-toastify";
 import { motion } from "framer-motion";
@@ -10,7 +10,7 @@ import { useParams } from "next/navigation";
 import { Tiles } from "@/components/layout/backgroundTiles";
 import { VerxioLoaderWhite } from "@/components/ui/verxio-loader-white";
 import { Transaction, Connection } from "@solana/web3.js";
-import { checkUserLoyaltyProgramMembership } from "@/app/actions/loyalty";
+import { awardLoyaltyPointsAfterPurchase, checkUserLoyaltyMembership, fetchLoyaltyProgramDetails } from "./loyalty-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -56,18 +56,23 @@ const Page = () => {
           xpRequired: number;
           rewards: string[];
         }>;
+        pointsPerAction: Record<string, number>;
       };
     };
     selectedTier?: string;
     selectedDiscount?: string;
   } | null>(null);
   const [isCheckingLoyalty, setIsCheckingLoyalty] = useState(false);
+  const [loyaltyProgramDetails, setLoyaltyProgramDetails] = useState<{
+    name: string;
+    pointsPerAction: Record<string, number>;
+  } | null>(null);
+  const statusCheckTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(
     async () => {
       setIsLoading(true);
       try {
-        console.log("loading data", params.reference);
         const res = await fetch(`${BASE_URL}/api/payment?reference=${params.reference}`);
         if (!res.ok) {
           console.log("Failed to fetch payment data");
@@ -80,9 +85,10 @@ const Page = () => {
   
       } catch (err) {
         console.log("failed", err);
+        setIsLoading(false);
+      } finally {
+        setIsLoading(false);
       }
-  
-      setIsLoading(false);
     },
     [params.reference, BASE_URL]
   );
@@ -94,7 +100,7 @@ const Page = () => {
 
     setIsCheckingLoyalty(true);
     try {
-      const result = await checkUserLoyaltyProgramMembership(
+      const result = await checkUserLoyaltyMembership(
         user.wallet.address,
         data.loyaltyProgramAddress
       );
@@ -102,17 +108,7 @@ const Page = () => {
       if (result.success) {
         setLoyaltyMembership({
           isMember: result.isMember || false,
-          membershipData: result.membershipData ? {
-            assetId: result.membershipData.assetId || '',
-            xp: result.membershipData.xp || 0,
-            currentTier: result.membershipData.currentTier || '',
-            rewards: result.membershipData.rewards || [],
-            loyaltyProgram: result.membershipData.loyaltyProgram ? {
-              address: result.membershipData.loyaltyProgram.address || '',
-              name: result.membershipData.loyaltyProgram.name || '',
-              tiers: result.membershipData.loyaltyProgram.tiers || []
-            } : undefined
-          } : undefined,
+          membershipData: result.membershipData,
           selectedTier: undefined,
           selectedDiscount: undefined
         });
@@ -124,6 +120,28 @@ const Page = () => {
     }
   }, [user?.wallet?.address, data?.loyaltyProgramAddress]);
 
+  const loadLoyaltyProgramDetails = useCallback(async () => {
+    if (!data?.loyaltyProgramAddress) {
+      return;
+    }
+
+    try {
+      // Use extracted function to fetch loyalty program details
+      const result = await fetchLoyaltyProgramDetails(data.loyaltyProgramAddress);
+      if (result.success && result.data) {
+        setLoyaltyProgramDetails({
+          name: result.data.name,
+          pointsPerAction: result.data.pointsPerAction
+        });
+      } else {
+        console.error('Failed to fetch loyalty program details:', result.error);
+      }
+    } catch (error) {
+      console.error('Error fetching loyalty program details:', error);
+    }
+  }, [data?.loyaltyProgramAddress]);
+
+
   // Check loyalty membership when user connects wallet or data changes
   useEffect(() => {
     if (authenticated && user?.wallet?.address && data?.loyaltyProgramAddress) {
@@ -131,10 +149,86 @@ const Page = () => {
     }
   }, [authenticated, user?.wallet?.address, data?.loyaltyProgramAddress, checkLoyaltyMembership]);
 
+  // Fetch loyalty program details when data changes
+  useEffect(() => {
+    if (data?.loyaltyProgramAddress) {
+      loadLoyaltyProgramDetails();
+    }
+  }, [data?.loyaltyProgramAddress, loadLoyaltyProgramDetails]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  // Monitor payment status changes in real-time
+  useEffect(() => {
+    if (!data?.reference) return;
+
+    const checkStatusInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/api/payment?reference=${data.reference}`);
+        if (res.ok) {
+          const updatedData = await res.json();
+          if (updatedData.status !== data.status) {
+            setData(updatedData);
+            
+            // If payment was cancelled, show immediate feedback
+            if (updatedData.status === 'CANCELLED') {
+              toast.info('Payment has been cancelled', {
+                position: "top-right",
+                autoClose: 3000,
+                theme: "dark",
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking payment status:', error);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(checkStatusInterval);
+  }, [data?.reference, data?.status, BASE_URL]);
+
+  // Check status when user becomes active (clicks, scrolls, etc.)
+  useEffect(() => {
+    if (!data?.reference) return;
+
+    const handleUserActivity = () => {
+      // Debounce the status check to avoid too many API calls
+      if (statusCheckTimeout.current) {
+        clearTimeout(statusCheckTimeout.current);
+      }
+      statusCheckTimeout.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`${BASE_URL}/api/payment?reference=${data.reference}`);
+          if (res.ok) {
+            const updatedData = await res.json();
+            if (updatedData.status !== data.status) {
+              setData(updatedData);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking payment status on user activity:', error);
+        }
+      }, 1000); // Wait 1 second after user activity
+    };
+
+    // Listen for user interactions
+    document.addEventListener('click', handleUserActivity);
+    document.addEventListener('scroll', handleUserActivity);
+    document.addEventListener('keydown', handleUserActivity);
+
+    return () => {
+      document.removeEventListener('click', handleUserActivity);
+      document.removeEventListener('scroll', handleUserActivity);
+      document.removeEventListener('keydown', handleUserActivity);
+      if (statusCheckTimeout.current) {
+        clearTimeout(statusCheckTimeout.current);
+      }
+    };
+  }, [data?.reference, data?.status, BASE_URL]);
+  
   const CreateTransfer = async () => {
     if (!authenticated || !user?.wallet?.address) {
       toast.error("Please connect your wallet.");
@@ -152,7 +246,6 @@ const Page = () => {
     
     try {
       if (!data || !data.recipient) {
-        console.log("Recipient wallet address is missing");
         setIsLoading(false);
         setTransactionStatus("failed");
         return;
@@ -173,7 +266,6 @@ const Page = () => {
         finalAmount = Math.max(0, finalAmount - discountAmount);
       }
 
-      console.log(finalAmount);
       // Step 1: Get transaction from backend with updated amount
       const txResponse = await fetch('/api/payment/build-transaction', {
         method: 'POST',
@@ -206,21 +298,59 @@ const Page = () => {
         address: wallets[0].address
       });
 
-
       // Step 3: Update payment status to success in database
       if (data?.reference) {
         try {
+          // Calculate discount amount for database storage
+          let discountAmountForDB = "0";
+          if (loyaltyMembership?.selectedDiscount) {
+            const discountText = loyaltyMembership.selectedDiscount;
+            if (discountText.includes('%')) {
+              const percentage = parseFloat(discountText.replace('%', ''));
+              discountAmountForDB = (parseFloat(data.amount) * (percentage / 100)).toString();
+            } else if (discountText.includes('$')) {
+              discountAmountForDB = discountText.replace('$', '');
+            }
+          }
+
           await fetch(`/api/payment/${data.reference}/status`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
               status: "SUCCESS",
-              signature: result.signature 
+              signature: result.signature,
+              loyaltyDiscount: discountAmountForDB,
+              amount: finalAmount.toString()
             }),
           });
         } catch (error) {
           console.error("Failed to update payment status:", error);
           // Don't fail the payment if status update fails
+        }
+      }
+
+      // Step 4: Award loyalty points if loyalty program exists
+      if (data?.loyaltyProgramAddress && user?.wallet?.address) {
+        try {
+          const loyaltyResult = await awardLoyaltyPointsAfterPurchase(
+            user.wallet.address,
+            data.loyaltyProgramAddress,
+            parseFloat(data.amount)
+          );
+
+          if (loyaltyResult.success) {
+            toast.success(loyaltyResult.message, {
+              position: "top-right",
+              autoClose: 5000,
+              theme: "dark",
+            });
+          } else {
+            console.warn('Loyalty points award failed:', loyaltyResult.error);
+            // Don't fail the payment if loyalty award fails
+          }
+        } catch (error) {
+          console.error("Failed to award loyalty points:", error);
+          // Don't fail the payment if loyalty award fails
         }
       }
       
@@ -250,6 +380,7 @@ const Page = () => {
     if (authenticated) {
       // Logout first to show wallet selection
       await logout();
+      window.location.reload();
       toast.info("Please select a new wallet", {
         position: "top-right",
         autoClose: 3000,
@@ -261,6 +392,7 @@ const Page = () => {
       login();
     }
   };
+
 
   if (isLoading) {
     return (
@@ -333,6 +465,23 @@ const Page = () => {
                     {data.recipient.slice(0, 8)}...{data.recipient.slice(-8)}
                   </span>
                 </div>
+                {/* Loyalty Points Awarded */}
+                {data?.loyaltyProgramAddress && (
+                  <div className="flex justify-between items-center pt-2 border-t border-white/10">
+                    <span className="text-green-400">Loyalty Points:</span>
+                    <span className="text-green-400 font-medium">
+                      {(() => {
+                        if (loyaltyMembership?.membershipData?.loyaltyProgram?.pointsPerAction) {
+                          return loyaltyMembership.membershipData.loyaltyProgram.pointsPerAction.purchase || 0;
+                        }
+                        if (loyaltyProgramDetails?.pointsPerAction) {
+                          return loyaltyProgramDetails.pointsPerAction.purchase || 0;
+                        }
+                        return 0;
+                      })()} points
+                    </span>
+                  </div>
+                )}
               </div>
               
               <div className="pt-4 space-y-3">
@@ -340,7 +489,7 @@ const Page = () => {
                 {/* Action Buttons */}
                 <div className="flex justify-center gap-3">
                   <a
-                    href={`https://explorer.solana.com/tx/${data?.signature || transactionSignature}?cluster=devnet`}
+                    href={`https://explorer.solana.com/tx/${data?.signature || transactionSignature}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-[#00adef]/20 hover:bg-[#00adef]/30 border border-[#00adef]/40 rounded-lg text-[#00adef] text-sm font-medium transition-colors"
@@ -541,74 +690,118 @@ const Page = () => {
                 {/* Compact Discount Selection - Only show when loyalty pass exists */}
                 {loyaltyMembership?.isMember && loyaltyMembership?.membershipData?.loyaltyProgram?.tiers && loyaltyMembership.membershipData && (
                   <div className="p-4 bg-black/20 rounded-lg border border-white/10">
-                    <div className="text-center mb-3">
-                      <div className="text-white font-medium text-sm">Available Discount</div>
-                    </div>
-                    
-                    <Select 
-                      value={loyaltyMembership.selectedTier || ''} 
-                      onValueChange={(value) => {
-                        if (value && loyaltyMembership) {
-                          const selectedTier = loyaltyMembership.membershipData?.loyaltyProgram?.tiers.find(
-                            (tier: any) => tier.name === value
-                          );
-                          setLoyaltyMembership({
-                            ...loyaltyMembership,
-                            selectedTier: value,
-                            selectedDiscount: selectedTier?.rewards[0] || 'No discount'
-                          });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="bg-black/20 border-white/20 text-white h-12 w-full">
-                        <SelectValue placeholder="Choose a discount..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-black/90 border-white/20 min-w-[200px]">
-                        {loyaltyMembership.membershipData.loyaltyProgram.tiers.map((tier: any) => {
-                          const isEligible = loyaltyMembership.membershipData!.xp >= tier.xpRequired;
-                          return (
-                            <SelectItem 
-                              key={tier.name} 
-                              value={tier.name} 
-                              className={`text-white ${!isEligible ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              disabled={!isEligible}
-                            >
-                              <div className="flex flex-col">
-                                <span className="font-medium">{tier.name}: {tier.rewards[0]}</span>
-                                <span className="text-xs text-gray-300">
-                                  {/* {tier.xpRequired.toLocaleString()} XP required */}
-                                  {!isEligible && ` - Need ${(tier.xpRequired - loyaltyMembership.membershipData!.xp).toLocaleString()} more XP`}
-                                </span>
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
+                    {(() => {
+                      const eligibleTiers = loyaltyMembership.membershipData.loyaltyProgram.tiers.filter(
+                        (tier: any) => loyaltyMembership.membershipData!.xp >= tier.xpRequired
+                      );
+                      
+                      if (eligibleTiers.length === 0) {
+                        return (
+                          <div className="text-center py-4">
+                            <div className="text-orange-400 font-medium text-sm mb-2">
+                              No Discounts Available Yet
+                            </div>
+                            <div className="text-gray-400 text-xs">
+                              You need more verxio points to qualify.
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <>
+                          <div className="text-center mb-3">
+                            <div className="text-white font-medium text-sm">Available Discount</div>
+                          </div>
+                          
+                          <Select 
+                            value={loyaltyMembership.selectedTier || ''} 
+                            onValueChange={(value) => {
+                              if (value && loyaltyMembership) {
+                                const selectedTier = loyaltyMembership.membershipData?.loyaltyProgram?.tiers.find(
+                                  (tier: any) => tier.name === value
+                                );
+                                setLoyaltyMembership({
+                                  ...loyaltyMembership,
+                                  selectedTier: value,
+                                  selectedDiscount: selectedTier?.rewards[0] || 'No discount'
+                                });
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="bg-black/20 border-white/20 text-white h-12 w-full">
+                              <SelectValue placeholder="Choose a discount..." />
+                            </SelectTrigger>
+                            <SelectContent className="bg-black/90 border-white/20 min-w-[200px]">
+                              {eligibleTiers.map((tier: any) => (
+                                <SelectItem 
+                                  key={tier.name} 
+                                  value={tier.name} 
+                                  className="text-white"
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{tier.name}: {tier.rewards[0]}</span>
+                                    <span className="text-xs text-gray-300">
+                                      {tier.xpRequired.toLocaleString()} XP required
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
             ) : (
               <div className="p-4 bg-gray-500/20 rounded-lg border border-gray-500/30">
                 <div className="text-center">
-                  <div className="text-gray-400 font-semibold text-lg">No Loyalty Program</div>
                   <div className="text-gray-300 text-sm">This payment is not associated with a loyalty program</div>
                 </div>
               </div>
             )}
 
-            {/* Rewards Section */}
-            <div className="p-4 bg-gradient-to-r from-[#00adef]/20 to-purple-500/20 rounded-lg border border-[#00adef]/30">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-white font-semibold text-lg">🎁 Earn Rewards</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-white font-bold text-2xl">100</div>
-                  <div className="text-[#00adef] text-xs">Verxio Points</div>
+            {/* Rewards Section - Only show when loyalty program exists */}
+            {data.loyaltyProgramAddress && (
+              <div className="p-4 bg-gradient-to-r from-[#00adef]/20 to-purple-500/20 rounded-lg border border-[#00adef]/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-white font-semibold text-lg">🎁 Earn Rewards</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-white font-bold text-2xl">
+                      {(() => {
+                        if (data.loyaltyProgramAddress) {
+                          // If user is a member, get points from their membership data
+                          if (loyaltyMembership?.membershipData?.loyaltyProgram?.pointsPerAction) {
+                            const pointsPerAction = loyaltyMembership.membershipData.loyaltyProgram.pointsPerAction;
+                            return pointsPerAction.purchase || '0';
+                          }
+                          // If not a member, get points from fetched program details
+                          if (loyaltyProgramDetails?.pointsPerAction) {
+                            const pointsPerAction = loyaltyProgramDetails.pointsPerAction;
+                            return pointsPerAction.purchase || 0;
+                          }
+                          // Show loading state while fetching program details
+                          return (
+                            <div className="flex items-center space-x-2">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span className="text-sm">Loading...</span>
+                            </div>
+                          );
+                        }
+                        return '0';
+                      })()}
+                    </div>
+                    <div className="text-[#00adef] text-xs">
+                      Verxio Points
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             
             {/* Transaction Details */}
             <div className="p-4 bg-black/20 rounded-lg border border-white/10">
@@ -642,6 +835,8 @@ const Page = () => {
               </div>
             </div>
             
+
+
             {/* Wallet Connection */}
             <div className="space-y-4">
               {!authenticated ? (
@@ -653,14 +848,28 @@ const Page = () => {
                 </button>
               ) : (
                 <button
-                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white bg-[#00adef] py-[10px] w-full cursor-pointer hover:opacity-80 transition-opacity gap-3`}
+                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${
+                    isProcessing || isCheckingLoyalty || !loyaltyProgramDetails
+                      ? 'bg-gray-500 cursor-not-allowed opacity-50'
+                      : 'bg-[#00adef] cursor-pointer hover:opacity-80'
+                  }`}
                   onClick={CreateTransfer}
-                  disabled={isProcessing}
+                  disabled={isProcessing || isCheckingLoyalty || !loyaltyProgramDetails}
                 >
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Processing...
+                    </>
+                  ) : isCheckingLoyalty ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Checking eligibile rewards
+                    </>
+                  ) : !loyaltyProgramDetails ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading Program...
                     </>
                   ) : (
                     "Pay Now"
