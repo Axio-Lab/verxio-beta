@@ -91,26 +91,15 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
         }
       },
       select: {
-        amount: true,
         loyaltyDiscount: true
       }
     });
 
-    let totalDiscounts = 0;
-    discountPayments.forEach(payment => {
-      const discountText = payment.loyaltyDiscount;
-      const paymentAmount = parseFloat(payment.amount);
-      
-      if (discountText.includes('%')) {
-        // Percentage discount
-        const percentage = parseFloat(discountText.replace('%', ''));
-        totalDiscounts += (paymentAmount * percentage) / 100;
-      } else if (discountText.includes('$')) {
-        // Dollar discount
-        const dollarAmount = parseFloat(discountText.replace('$', ''));
-        totalDiscounts += dollarAmount;
-      }
-    });
+    // Simply sum up the actual discount amounts (already calculated)
+    const totalDiscounts = discountPayments.reduce((sum, payment) => {
+      const discountAmount = parseFloat(payment.loyaltyDiscount);
+      return sum + (isNaN(discountAmount) ? 0 : discountAmount);
+    }, 0);
 
     // 6. Get Recent Payment Activity
     const recentPayments = await prisma.paymentRecord.findMany({

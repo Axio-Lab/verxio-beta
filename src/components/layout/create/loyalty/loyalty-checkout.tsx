@@ -127,6 +127,12 @@ export const LoyaltyCheckoutCard = ({
     }
   };
 
+  const canRemoveTier = (tier: LoyaltyTier) => {
+    // Must have at least 1 tier
+    if (tiers.length <= 1) return false;
+    return true;
+  };
+
   const updateTier = (id: string, field: keyof LoyaltyTier, value: any) => {
     const updatedTiers = tiers.map(tier =>
       tier.id === id ? { ...tier, [field]: value } : tier
@@ -147,6 +153,14 @@ export const LoyaltyCheckoutCard = ({
     if (pointActions.length > 1) {
       setPointActions(pointActions.filter(action => action.id !== id));
     }
+  };
+
+  const canRemovePointAction = (action: LoyaltyPointAction) => {
+    // Cannot remove Purchase action
+    if (action.action === 'Purchase') return false;
+    // Must have at least 1 action
+    if (pointActions.length <= 1) return false;
+    return true;
   };
 
   const updatePointAction = (id: string, field: keyof LoyaltyPointAction, value: any) => {
@@ -468,7 +482,7 @@ export const LoyaltyCheckoutCard = ({
                       <div key={tier.id} className="p-4 bg-black/20 rounded-lg border border-white/10">
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-white font-medium">Tier {index + 1}</span>
-                          {tiers.length > 1 && (
+                          {canRemoveTier(tier) && (
                             <button
                               onClick={() => removeTier(tier.id)}
                               className="p-1 bg-red-500/20 hover:bg-red-500/30 rounded transition-colors"
@@ -571,7 +585,7 @@ export const LoyaltyCheckoutCard = ({
                       <div key={action.id} className="p-4 bg-black/20 rounded-lg border border-white/10">
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-white font-medium">Action {index + 1}</span>
-                          {pointActions.length > 1 && (
+                          {canRemovePointAction(action) && (
                             <button
                               onClick={() => removePointAction(action.id)}
                               className="p-1 bg-red-500/20 hover:bg-red-500/30 rounded transition-colors"
@@ -587,8 +601,11 @@ export const LoyaltyCheckoutCard = ({
                             <Input
                               value={action.action}
                               onChange={(e) => updatePointAction(action.id, 'action', e.target.value)}
-                              placeholder="e.g., Purchase, Referral"
-                              className="bg-black/20 border-white/20 text-white h-10 text-sm"
+                              placeholder="e.g., Referral, Signup"
+                              disabled={action.action === 'Purchase'}
+                              className={`bg-black/20 border-white/20 text-white h-10 text-sm ${
+                                action.action === 'Purchase' ? 'opacity-50 cursor-not-allowed' : ''
+                              }`}
                             />
                           </div>
                           <div className="space-y-2">
@@ -631,8 +648,8 @@ export const LoyaltyCheckoutCard = ({
                   </AppButton>
                   <AppButton
                     onClick={handleSubmit}
-                    disabled={isCreating}
-                    className="flex-1 bg-gradient-to-r from-[#00adef] to-[#056f96] hover:from-[#0098d1] hover:to-[#0088c1] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl shadow-[#00adef]/25 hover:shadow-[#00adef]/40 transform hover:scale-105 disabled:opacity-50"
+                    disabled={isCreating || tiers.length === 0 || pointActions.length === 0}
+                    className="flex-1 bg-gradient-to-r from-[#00adef] to-[#056f96] hover:from-[#0098d1] hover:to-[#0088d1] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl shadow-[#00adef]/25 hover:shadow-[#00adef]/40 transform hover:scale-105 disabled:opacity-50"
                   >
                     <div className="flex items-center gap-2 justify-center">
                       {isCreating ? (

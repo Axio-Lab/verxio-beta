@@ -7,7 +7,7 @@ export async function POST(
 ) {
   try {
     const { reference } = await params;
-    const { status, signature } = await request.json();
+    const { status, signature, loyaltyDiscount, amount } = await request.json();
 
     if (!reference || !status) {
       return NextResponse.json(
@@ -25,13 +25,37 @@ export async function POST(
       );
     }
 
-    // Update payment record status
+    // Validate loyaltyDiscount if provided
+    if (loyaltyDiscount !== undefined && (isNaN(parseFloat(loyaltyDiscount)) || parseFloat(loyaltyDiscount) < 0)) {
+      return NextResponse.json(
+        { error: 'Invalid loyalty discount amount' },
+        { status: 400 }
+      );
+    }
+
+    // Validate amount if provided
+    if (amount !== undefined && (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0)) {
+      return NextResponse.json(
+        { error: 'Invalid amount' },
+        { status: 400 }
+      );
+    }
+
+    // Prepare update data
+    const updateData: any = {
+      status: status as any,
+      updatedAt: new Date(),
+    };
+
+    // Add optional fields if provided
+    if (signature) updateData.signature = signature;
+    if (loyaltyDiscount !== undefined) updateData.loyaltyDiscount = loyaltyDiscount;
+    if (amount !== undefined) updateData.amount = amount;
+
+    // Update payment record status and additional fields
     const updatedPayment = await prisma.paymentRecord.update({
       where: { reference },
-      data: {
-        status: status as any,
-        ...(signature && { signature, updatedAt: new Date() }),
-      },
+      data: updateData,
     });
 
     return NextResponse.json({
@@ -40,6 +64,8 @@ export async function POST(
       payment: {
         reference: updatedPayment.reference,
         status: updatedPayment.status,
+        amount: updatedPayment.amount,
+        loyaltyDiscount: updatedPayment.loyaltyDiscount,
         updatedAt: updatedPayment.updatedAt,
       },
     });
