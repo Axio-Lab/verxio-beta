@@ -63,6 +63,38 @@ model User {
   @@map("users")
 }
 
+model VerxioCredit {
+  id          String   @id @default(cuid())
+  userAddress String   @unique
+  balance     Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("verxio_credits")
+}
+
+model VerxioCreditHistory {
+  id           String   @id @default(cuid())
+  creator      String
+  points       Int
+  action       String
+  assetAddress String
+  assetOwner   String
+  createdAt    DateTime @default(now())
+
+  @@map("verxio_credit_history")
+}
+
+model LoyaltyProgramClaimStatus {
+  id             String   @id @default(cuid())
+  programAddress String   @unique
+  claimEnabled   Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("loyalty_program_claim_status")
+}
+
 enum PaymentStatus {
   PENDING
   SUCCESS

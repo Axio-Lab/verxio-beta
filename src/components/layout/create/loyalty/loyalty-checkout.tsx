@@ -13,13 +13,13 @@ import { VerxioLoaderWhite } from "@/components/ui/verxio-loader-white";
 import { uploadFile } from "@/app/actions/files";
 import { generateNftMetadata } from "@/lib/metadata/generateMetadata";
 import { createLoyaltyProgram, initializeVerxio } from "@/app/actions/verxio";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { signerIdentity, generateSigner } from '@metaplex-foundation/umi'
+import { usePrivy } from "@privy-io/react-auth";
+import { generateSigner } from '@metaplex-foundation/umi'
 import { useSolanaWallets, } from "@privy-io/react-auth/solana";
-// import { createPrivySigner } from "@/lib/utils";
 import { uint8ArrayToBase58String } from "@/lib/utils";
 import { getVerxioConfig } from "@/app/actions/loyalty";
 import { saveLoyaltyProgram } from "@/app/actions/loyalty";
+import { getUserVerxioCreditBalance, awardOrRevokeLoyaltyPoints } from "@/app/actions/verxio-credit";
 
 interface LoyaltyTier {
   id: string;
@@ -67,9 +67,7 @@ export const LoyaltyCheckoutCard = ({
   const [error, setError] = useState<string | null>(null);
   const { user } = usePrivy();
   const userWallet = user?.wallet?.address!;
-  // const { wallet } = usePrivyStandardWallet();
   const { wallets } = useSolanaWallets();
-  // console.log("wallets", wallets);
   const wallet = wallets[0];
 
   // Validate wallet and create signer
@@ -77,9 +75,6 @@ export const LoyaltyCheckoutCard = ({
     console.error("Wallet not available");
     return null;
   }
-
-  // const userSigner = createPrivySigner(wallet, userWallet);
-
 
   // Handle countdown and redirect
   React.useEffect(() => {
@@ -197,6 +192,14 @@ export const LoyaltyCheckoutCard = ({
       setIsCreating(true);
       setError(null);
 
+      // Check if user has sufficient Verxio credits (minimum 5000 required)
+      const creditCheck = await getUserVerxioCreditBalance(userWallet);
+      if (!creditCheck.success || (creditCheck.balance || 0) < 5000) {
+        setError(`Insufficient Verxio credits. You need at least 5000 credits to create a loyalty program. Current balance: ${creditCheck.balance || 0} credits.`);
+        setIsCreating(false);
+        return;
+      }
+
       // Upload image to Pinata only when submitting
       let finalImageUrl: string | null = null;
       if (uploadedImageFile) {
@@ -276,6 +279,20 @@ export const LoyaltyCheckoutCard = ({
                     authorityPublicKey: authorityPublicKey!,
                     authoritySecretKey: authoritySecretKey!,
                   });
+
+                  // Deduct 1000 Verxio credits for program creation
+                  const deductionResult = await awardOrRevokeLoyaltyPoints({
+                    creatorAddress: userWallet,
+                    points: 1000,
+                    assetAddress: programPublicKey!,
+                    assetOwner: userWallet,
+                    action: 'REVOKE'
+                  });
+
+                  if (!deductionResult.success) {
+                    console.error('Failed to deduct Verxio credits:', deductionResult.error);
+                    // Don't fail the entire process, just log the error
+                  }
                 } catch (error) {
                   console.error('Error saving loyalty program to database:', error);
                 }

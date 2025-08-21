@@ -8,12 +8,14 @@ import { VerxioContext, getProgramDetails } from '@verxioprotocol/core'
 const RPC_ENDPOINT = `${process.env.RPC_URL}?api-key=${process.env.HELIUS_API_KEY}`;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const USDC_MINT = process.env.USDC_MINT;
+const AUTHORIZED_ADDRESS = process.env.AUTHORIZED_ADDRESS;
 
 export const getVerxioConfig = async () => {
   return {
     rpcEndpoint: RPC_ENDPOINT,
     privateKey: PRIVATE_KEY,
-    usdcMint: USDC_MINT
+    usdcMint: USDC_MINT,
+    authorizedAddress: AUTHORIZED_ADDRESS
   };
 }
 
@@ -28,6 +30,7 @@ export interface CreateLoyaltyProgramData {
 
 export const saveLoyaltyProgram = async (data: CreateLoyaltyProgramData) => {
   try {
+    // Create the loyalty program
     const loyaltyProgram = await prisma.loyaltyProgram.create({
       data: {
         creator: data.creator,
@@ -36,6 +39,14 @@ export const saveLoyaltyProgram = async (data: CreateLoyaltyProgramData) => {
         signature: data.signature,
         authorityPublicKey: data.authorityPublicKey,
         authoritySecretKey: data.authoritySecretKey,
+      }
+    })
+
+    // Create the claim status record with default enabled
+    await prisma.loyaltyProgramClaimStatus.create({
+      data: {
+        programAddress: data.programPublicKey,
+        claimEnabled: true // Default to true
       }
     })
 
@@ -384,6 +395,11 @@ export const getLoyaltyProgramByAddress = async (programAddress: string) => {
       return { success: false, error: 'Loyalty program not found in database' };
     }
 
+    // Get the claim status from our database
+    const claimStatus = await prisma.loyaltyProgramClaimStatus.findUnique({
+      where: { programAddress }
+    });
+
     // Get program details from the blockchain
     const programDetails = await getLoyaltyProgramDetails(
       loyaltyProgram.creator,
@@ -404,12 +420,133 @@ export const getLoyaltyProgramByAddress = async (programAddress: string) => {
         members: programDetails.programDetails?.numMinted,
         name: programDetails.programDetails?.name,
         tiers: programDetails.programDetails?.tiers || [],
-        pointsPerAction: programDetails.programDetails?.pointsPerAction || {}
+        pointsPerAction: programDetails.programDetails?.pointsPerAction || {},
+        claimEnabled: claimStatus?.claimEnabled ?? true 
       }
     };
 
   } catch (error) {
     console.error('Error fetching loyalty program by address:', error);
     return { success: false, error: 'Failed to fetch loyalty program details' };
+  }
+}
+
+export const getClaimStatus = async (programAddress: string) => {
+  try {
+    const claimStatus = await prisma.loyaltyProgramClaimStatus.findUnique({
+      where: { programAddress }
+    });
+
+    return { 
+      success: true, 
+      claimEnabled: claimStatus?.claimEnabled ?? true 
+    };
+  } catch (error) {
+    console.error('Error getting claim status:', error);
+    return { 
+      success: false, 
+      claimEnabled: true, // Default to true on error
+      error: 'Failed to get claim status' 
+    };
+  }
+}
+
+export const getLoyaltyPassDetails = async (passAddress: string) => {
+  try {
+    // Fetch the specific loyalty pass by its address
+    const url = RPC_ENDPOINT;
+    const options = {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": "getAsset",
+        "params": {
+          "id": passAddress
+        }
+      })
+    };
+
+    const response = await fetch(url, options);
+    const data = await response.json();
+    
+    if (data.error) {
+      return { success: false, error: data.error.message };
+    }
+
+    const asset = data.result;
+    if (!asset) {
+      return { success: false, error: 'Loyalty pass not found' };
+    }
+
+    // Extract loyalty data from the asset
+    const loyaltyData = asset.external_plugins?.[0]?.data;
+    if (!loyaltyData) {
+      return { success: false, error: 'Not a valid loyalty pass' };
+    }
+
+    // Get collection address from grouping
+    const collectionGroup = asset.grouping?.find((group: any) => group.group_key === 'collection');
+    if (!collectionGroup) {
+      return { success: false, error: 'Pass does not belong to a collection' };
+    }
+
+    // Check if this collection exists in our database
+    const loyaltyProgram = await prisma.loyaltyProgram.findFirst({
+      where: {
+        programPublicKey: collectionGroup.group_value
+      },
+      select: {
+        creator: true,
+        programPublicKey: true
+      }
+    });
+
+    if (!loyaltyProgram) {
+      return { success: false, error: 'Pass does not belong to a registered loyalty program' };
+    }
+
+    return {
+      success: true,
+      data: {
+        assetId: asset.id,
+        collectionAddress: collectionGroup.group_value,
+        programCreator: loyaltyProgram.creator,
+        owner: asset.ownership?.owner,
+        nftName: asset.content?.metadata?.name,
+        organizationName: loyaltyData.organization_name,
+        xp: loyaltyData.xp || 0,
+        currentTier: loyaltyData.current_tier,
+        lastAction: loyaltyData.last_action,
+        tierUpdatedAt: loyaltyData.tier_updated_at,
+        rewards: loyaltyData.rewards
+      }
+    };
+
+  } catch (error) {
+    console.error('Error fetching loyalty pass details:', error);
+    return { success: false, error: 'Failed to fetch loyalty pass details' };
+  }
+}
+
+export const toggleClaimEnabled = async (programAddress: string, enabled: boolean) => {
+  try {
+    // Update the claim status in the database
+    await prisma.loyaltyProgramClaimStatus.update({
+      where: { programAddress },
+      data: { claimEnabled: enabled }
+    });
+    
+    return { 
+      success: true, 
+      message: `Claim ${enabled ? 'enabled' : 'disabled'} successfully` 
+    };
+  } catch (error) {
+    console.error('Error toggling claim enabled:', error);
+    return { 
+      success: false, 
+      error: 'Failed to toggle claim status' 
+    };
   }
 }

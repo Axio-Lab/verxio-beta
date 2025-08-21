@@ -79,10 +79,10 @@ const Page = () => {
           setIsLoading(false);
           return;
         }
-  
+
         const response = await res.json();
         setData(response);
-  
+
       } catch (err) {
         console.log("failed", err);
         setIsLoading(false);
@@ -104,7 +104,7 @@ const Page = () => {
         user.wallet.address,
         data.loyaltyProgramAddress
       );
-      
+
       if (result.success) {
         setLoyaltyMembership({
           isMember: result.isMember || false,
@@ -171,7 +171,7 @@ const Page = () => {
           const updatedData = await res.json();
           if (updatedData.status !== data.status) {
             setData(updatedData);
-            
+
             // If payment was cancelled, show immediate feedback
             if (updatedData.status === 'CANCELLED') {
               toast.info('Payment has been cancelled', {
@@ -228,22 +228,22 @@ const Page = () => {
       }
     };
   }, [data?.reference, data?.status, BASE_URL]);
-  
+
   const CreateTransfer = async () => {
     if (!authenticated || !user?.wallet?.address) {
       toast.error("Please connect your wallet.");
       return;
     }
-    
+
     // Prevent multiple clicks
     if (isProcessing) {
       toast.warning("Payment already in progress. Please wait...");
       return;
     }
-    
+
     setIsProcessing(true);
     setTransactionStatus("pending");
-    
+
     try {
       if (!data || !data.recipient) {
         setIsLoading(false);
@@ -254,7 +254,7 @@ const Page = () => {
       // Calculate final amount with loyalty discount
       let finalAmount = parseFloat(data.amount);
       let discountAmount = 0;
-      
+
       if (loyaltyMembership?.selectedDiscount) {
         const discountText = loyaltyMembership.selectedDiscount;
         if (discountText.includes('%')) {
@@ -286,7 +286,7 @@ const Page = () => {
 
       // Step 2: User signs and sends transaction using Privy Solana wallet
       const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
-      
+
       // Sign and send transaction using Privy (automatically sends to blockchain)
       if (!wallets || wallets.length === 0) {
         throw new Error('No Solana wallets available');
@@ -316,7 +316,7 @@ const Page = () => {
           await fetch(`/api/payment/${data.reference}/status`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               status: "SUCCESS",
               signature: result.signature,
               loyaltyDiscount: discountAmountForDB,
@@ -353,16 +353,16 @@ const Page = () => {
           // Don't fail the payment if loyalty award fails
         }
       }
-      
+
       setIsProcessing(false);
       setTransactionStatus("success");
       setTransactionSignature(result.signature);
-      const discountMessage = loyaltyMembership?.selectedDiscount 
+      const discountMessage = loyaltyMembership?.selectedDiscount
         ? ` with ${loyaltyMembership.selectedDiscount} discount applied`
         : '';
-      
+
       toast.success(`Payment successful! Signature: ${result.signature.slice(0, 8)}...${discountMessage}`);
-      
+
       return { success: true };
 
     } catch (err) {
@@ -376,7 +376,7 @@ const Page = () => {
 
   const handleConnectWallet = async () => {
     if (!ready) return;
-    
+
     if (authenticated) {
       // Logout first to show wallet selection
       await logout();
@@ -442,12 +442,12 @@ const Page = () => {
                 {data?.status === "SUCCESS" ? "Payment Completed" : "Payment Successful!"}
               </h3>
               <p className="text-white/80">
-                {data?.status === "SUCCESS" 
-                  ? "This payment has already been processed." 
+                {data?.status === "SUCCESS"
+                  ? "This payment has already been processed."
                   : "Your payment has been processed successfully!"
                 }
               </p>
-              
+
               <div className="p-4 bg-black/20 rounded-lg border border-white/10">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-white">Amount:</span>
@@ -483,13 +483,13 @@ const Page = () => {
                   </div>
                 )}
               </div>
-              
+
               <div className="pt-4 space-y-3">
-                
+
                 {/* Action Buttons */}
                 <div className="flex justify-center gap-3">
                   <a
-                    href={`https://explorer.solana.com/tx/${data?.signature || transactionSignature}`}
+                    href={`https://solscan.io/tx/${data?.signature || transactionSignature}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-[#00adef]/20 hover:bg-[#00adef]/30 border border-[#00adef]/40 rounded-lg text-[#00adef] text-sm font-medium transition-colors"
@@ -499,7 +499,7 @@ const Page = () => {
                     </svg>
                     View on Explorer
                   </a>
-                  
+
 
                 </div>
               </div>
@@ -528,7 +528,7 @@ const Page = () => {
             >
               <h3 className="text-xl font-bold text-white">Payment Cancelled</h3>
               <p className="text-white/80">This payment has been cancelled and cannot be processed.</p>
-              
+
               <div className="pt-4 space-y-3">
                 <div className="text-center">
                   <p className="text-zinc-400 text-sm mb-4">
@@ -547,7 +547,7 @@ const Page = () => {
     <main className="min-h-screen bg-black relative overflow-hidden">
       {/* Background Stars */}
       <Tiles rows={50} cols={50} tileSize="md" />
-      
+
       {/* Header with Logo */}
       <div className="relative z-20 bg-black/80 backdrop-blur-sm border-b border-white/10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -590,13 +590,13 @@ const Page = () => {
                 <div className="text-3xl font-bold text-white mb-2">{data.amount} USDC</div>
                 <div className="text-sm text-gray-300">Payment Amount</div>
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-white/70 text-xs">Fee (0.5%):</span>
                   <span className="text-white/70 text-xs">{(parseFloat(data.amount) * 0.005).toFixed(4)} USDC</span>
                 </div>
-                
+
                 {/* Loyalty Discount */}
                 {loyaltyMembership?.selectedDiscount && (
                   <div className="flex justify-between items-center">
@@ -606,7 +606,7 @@ const Page = () => {
                     </span>
                   </div>
                 )}
-                
+
                 <div className="flex justify-between items-center pt-2 border-t border-white/10">
                   <span className="text-white font-medium text-sm">Total You Pay:</span>
                   <span className="text-white font-bold text-lg">
@@ -614,7 +614,7 @@ const Page = () => {
                       const baseAmount = parseFloat(data.amount);
                       const fee = baseAmount * 0.005;
                       let discount = 0;
-                      
+
                       if (loyaltyMembership?.selectedDiscount) {
                         const discountText = loyaltyMembership.selectedDiscount;
                         if (discountText.includes('%')) {
@@ -624,13 +624,13 @@ const Page = () => {
                           discount = parseFloat(discountText.replace('$', ''));
                         }
                       }
-                      
+
                       const finalAmount = baseAmount + fee - discount;
                       return `${Math.max(0, finalAmount).toFixed(4)} USDC`;
                     })()}
                   </span>
                 </div>
-                
+
                 {loyaltyMembership?.selectedDiscount && (
                   <div className="text-center pt-2">
                     <div className="text-green-400 text-xs font-medium">
@@ -649,7 +649,7 @@ const Page = () => {
                 )}
               </div>
             </div>
-            
+
             {/* Loyalty Program Section */}
             {data.loyaltyProgramAddress ? (
               <div className="space-y-4">
@@ -663,7 +663,7 @@ const Page = () => {
                       <span className="text-white text-sm">Checking your membership...</span>
                     </div>
                   </div>
-                    ) : loyaltyMembership?.isMember ? (
+                ) : loyaltyMembership?.isMember ? (
                   <div className="p-3 bg-green-500/20 rounded-lg border border-green-500/30">
                     <div className="text-center">
                       <div className="text-green-400 font-semibold text-base mb-1">
@@ -694,7 +694,7 @@ const Page = () => {
                       const eligibleTiers = loyaltyMembership.membershipData.loyaltyProgram.tiers.filter(
                         (tier: any) => loyaltyMembership.membershipData!.xp >= tier.xpRequired
                       );
-                      
+
                       if (eligibleTiers.length === 0) {
                         return (
                           <div className="text-center py-4">
@@ -707,15 +707,15 @@ const Page = () => {
                           </div>
                         );
                       }
-                      
+
                       return (
                         <>
                           <div className="text-center mb-3">
                             <div className="text-white font-medium text-sm">Available Discount</div>
                           </div>
-                          
-                          <Select 
-                            value={loyaltyMembership.selectedTier || ''} 
+
+                          <Select
+                            value={loyaltyMembership.selectedTier || ''}
                             onValueChange={(value) => {
                               if (value && loyaltyMembership) {
                                 const selectedTier = loyaltyMembership.membershipData?.loyaltyProgram?.tiers.find(
@@ -734,9 +734,9 @@ const Page = () => {
                             </SelectTrigger>
                             <SelectContent className="bg-black/90 border-white/20 min-w-[200px]">
                               {eligibleTiers.map((tier: any) => (
-                                <SelectItem 
-                                  key={tier.name} 
-                                  value={tier.name} 
+                                <SelectItem
+                                  key={tier.name}
+                                  value={tier.name}
                                   className="text-white"
                                 >
                                   <div className="flex flex-col">
@@ -802,7 +802,7 @@ const Page = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Transaction Details */}
             <div className="p-4 bg-black/20 rounded-lg border border-white/10">
               <div className="space-y-3">
@@ -834,7 +834,7 @@ const Page = () => {
                 )}
               </div>
             </div>
-            
+
 
 
             {/* Wallet Connection */}
@@ -848,11 +848,10 @@ const Page = () => {
                 </button>
               ) : (
                 <button
-                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${
-                    isProcessing || isCheckingLoyalty || !loyaltyProgramDetails
-                      ? 'bg-gray-500 cursor-not-allowed opacity-50'
-                      : 'bg-[#00adef] cursor-pointer hover:opacity-80'
-                  }`}
+                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${isProcessing || isCheckingLoyalty || !loyaltyProgramDetails
+                    ? 'bg-gray-500 cursor-not-allowed opacity-50'
+                    : 'bg-[#00adef] cursor-pointer hover:opacity-80'
+                    }`}
                   onClick={CreateTransfer}
                   disabled={isProcessing || isCheckingLoyalty || !loyaltyProgramDetails}
                 >
@@ -877,7 +876,7 @@ const Page = () => {
                 </button>
               )}
             </div>
-            
+
             <div className="text-center space-y-2">
               <p className="text-zinc-400 text-xs">
                 Loyalty rewards will be auto-credited to your account.
@@ -887,8 +886,8 @@ const Page = () => {
         </div>
       </div>
 
-      <ToastContainer 
-        position="top-right" 
+      <ToastContainer
+        position="top-right"
         autoClose={3000}
         theme="dark"
       />
