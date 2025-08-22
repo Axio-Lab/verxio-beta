@@ -2,7 +2,7 @@
 
 import { usePrivy } from '@privy-io/react-auth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { AuroraHero } from '@/components/layout/hero-section';
 import { Tiles } from '@/components/layout/backgroundTiles';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
@@ -12,7 +12,7 @@ import { getUserByReferralCode, createReferral } from '@/app/actions/referral';
 import { useReferral } from '@/hooks/useReferral';
 import { toast, ToastContainer } from 'react-toastify';
 
-export default function Home() {
+function HomeContent() {
   const { authenticated, ready, user } = usePrivy();
   const router = useRouter();
   const { getStoredReferralCode, clearReferralCode } = useReferral();
@@ -134,5 +134,24 @@ export default function Home() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center relative">
+        <Tiles
+          rows={50}
+          cols={50}
+          tileSize="md"
+        />
+        <div className="relative z-10">
+          <VerxioLoaderWhite size="md" />
+        </div>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
