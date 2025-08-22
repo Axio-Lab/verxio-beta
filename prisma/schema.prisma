@@ -57,8 +57,16 @@ model User {
   name          String?
   bio           String?
   avatar        String?
+  referralCode  String?  @unique
+  referralCount Int      @default(0)
+  pendingReferralCount Int @default(0)
+  signupBonusClaimed Boolean @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // Referral relationships
+  referralsGiven    Referral[] @relation("Referrer")
+  referralsReceived Referral[] @relation("ReferredUser")
 
   @@map("users")
 }
@@ -95,9 +103,31 @@ model LoyaltyProgramClaimStatus {
   @@map("loyalty_program_claim_status")
 }
 
+model Referral {
+  id              String        @id @default(cuid())
+  referrerId      String
+  referredUserId  String
+  status          ReferralStatus @default(PENDING)
+  referrerCreditsAwarded Boolean @default(false)
+  referredUserCreditsAwarded Boolean @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  referrer        User          @relation("Referrer", fields: [referrerId], references: [id])
+  referredUser    User          @relation("ReferredUser", fields: [referredUserId], references: [id])
+
+  @@map("referrals")
+}
+
 enum PaymentStatus {
   PENDING
   SUCCESS
   FAILED
   CANCELLED
+}
+
+enum ReferralStatus {
+  PENDING
+  SUCCESS
 }

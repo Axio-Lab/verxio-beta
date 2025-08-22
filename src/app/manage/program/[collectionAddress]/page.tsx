@@ -12,7 +12,8 @@ import { Gift, ExternalLink, Copy, ArrowLeft } from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import "react-toastify/dist/ReactToastify.css";
 import { getLoyaltyProgramDetails, getCollectionAuthoritySecretKey, getLoyaltyProgramUsers, toggleClaimEnabled, getClaimStatus, checkUserLoyaltyProgramMembership, getLoyaltyPassDetails } from '@/app/actions/loyalty';
-import { saveLoyaltyPass } from '@/app/actions/loyalty-pass';
+import { getUserByEmail, getUserByWallet } from '@/app/actions/user';
+import { saveLoyaltyPass, getLoyaltyPassesByProgram } from '@/app/actions/loyalty-pass';
 import { usePrivy } from '@privy-io/react-auth';
 import { initializeVerxio, issueNewLoyaltyPass, giftPoints, revokePoints } from '@/app/actions/verxio';
 import { convertSecretKeyToKeypair, uint8ArrayToBase58String } from '@/lib/utils';
@@ -51,8 +52,8 @@ export default function LoyaltyProgramDetailPage() {
   const [programDetails, setProgramDetails] = useState<ProgramDetails | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('issue');
   const [isLoading, setIsLoading] = useState(true);
-  const [recipientAddress, setRecipientAddress] = useState('');
-  const [passAddress, setPassAddress] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const [points, setPoints] = useState('');
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,7 +63,23 @@ export default function LoyaltyProgramDetailPage() {
   const [totalMembers, setTotalMembers] = useState(0);
   const [allMembers, setAllMembers] = useState<any[]>([]);
   const [claimEnabled, setClaimEnabled] = useState<boolean | undefined>(undefined);
+  const [memberEmails, setMemberEmails] = useState<Record<string, string | null>>({});
   const { user } = usePrivy();
+
+  // MemberEmail component to display user email
+  const MemberEmail = ({ owner, emails }: { owner: string; emails: Record<string, string | null> }) => {
+    const email = emails[owner];
+
+    if (email === undefined) {
+      return <p className="text-white/40 text-xs">Loading...</p>;
+    }
+
+    if (!email) {
+      return <p className="text-white/40 text-xs">No email</p>;
+    }
+
+    return <p className="text-white/60 text-xs">{email}</p>;
+  };
 
   const formatNumber = (num: number) => {
     return num.toLocaleString();
@@ -114,7 +131,7 @@ export default function LoyaltyProgramDetailPage() {
   const getUsers = async () => {
     setMembersLoading(true);
     try {
-      const result = await getLoyaltyProgramUsers(params.collectionAddress as string);
+      const result: any = await getLoyaltyProgramUsers(params.collectionAddress as string);
       if (result.success && result.users) {
         const sortedMembers = result.users.items.sort((a: any, b: any) => {
           const aXp = a.external_plugins?.[0]?.data?.xp;
@@ -126,6 +143,30 @@ export default function LoyaltyProgramDetailPage() {
         setMembers(sortedMembers.slice(0, ITEMS_PER_PAGE));
         setTotalMembers(result.users.total);
         setCurrentPage(1);
+
+        // Fetch all member emails at once
+        const emailPromises = sortedMembers.map(async (member: any) => {
+          const owner = member.ownership?.owner;
+          if (owner) {
+            try {
+              const userResult = await getUserByWallet(owner);
+              return { owner, email: userResult.success ? userResult.user?.email || null : null };
+            } catch (error) {
+              console.error('Error fetching email for', owner, error);
+              return { owner, email: null };
+            }
+          }
+          return { owner: null, email: null };
+        });
+
+        const emailResults = await Promise.all(emailPromises);
+        const emailMap: Record<string, string | null> = {};
+        emailResults.forEach(({ owner, email }) => {
+          if (owner) {
+            emailMap[owner] = email;
+          }
+        });
+        setMemberEmails(emailMap);
       } else {
         console.error('Error:', result.error);
       }
@@ -203,15 +244,26 @@ export default function LoyaltyProgramDetailPage() {
 
       const authoritySecretKey = authorityResult.authoritySecretKey;
       if (action === 'issue') {
-        if (!recipientAddress.trim()) {
-          toast.error('Please enter a recipient address');
+        if (!recipientEmail.trim()) {
+          toast.error('Please enter a recipient email address');
           return;
         }
 
+        // Fetch user wallet address from email
+        const userResult = await getUserByEmail(recipientEmail.trim());
+        if (!userResult.success || !userResult.user?.walletAddress) {
+          setRecipientEmail('');
+          toast.error('User not found. Please check the email address or ask the user to create an account first.');
+          return;
+        }
+ 
+
+        const recipientWalletAddress = userResult.user.walletAddress;
+
         // Check if recipient is already a member
-        const membershipCheck = await checkUserLoyaltyProgramMembership(recipientAddress.trim(), params.collectionAddress as string);
+        const membershipCheck = await checkUserLoyaltyProgramMembership(recipientWalletAddress, params.collectionAddress as string);
         if (membershipCheck.success && membershipCheck.isMember) {
-          setRecipientAddress('');
+          setRecipientEmail('');
           toast.error('This user is already a member!');
           return;
         }
@@ -227,7 +279,7 @@ export default function LoyaltyProgramDetailPage() {
         const assetKeypair = createSignerFromKeypair(context.umi, convertSecretKeyToKeypair(authoritySecretKey));
         const issueParams = {
           collectionAddress: params.collectionAddress as string,
-          recipient: recipientAddress.trim(),
+          recipient: recipientWalletAddress,
           passName: `${programDetails.name}`,
           passMetadataUri: programDetails.uri,
           assetSigner: generateSigner(context.umi),
@@ -238,7 +290,7 @@ export default function LoyaltyProgramDetailPage() {
         const result = await issueNewLoyaltyPass(context, issueParams);
         const passData = {
           programAddress: params.collectionAddress as string,
-          recipient: recipientAddress.trim(),
+          recipient: recipientWalletAddress,
           passPublicKey: result.asset.publicKey,
           passPrivateKey: uint8ArrayToBase58String(result.asset.secretKey),
           signature: result.signature
@@ -255,7 +307,7 @@ export default function LoyaltyProgramDetailPage() {
           creatorAddress: user.wallet.address,
           points: 500,
           assetAddress: result.asset.publicKey,
-          assetOwner: recipientAddress.trim(),
+          assetOwner: recipientWalletAddress,
           action: 'REVOKE'
         });
 
@@ -264,13 +316,13 @@ export default function LoyaltyProgramDetailPage() {
           // Don't fail the entire operation, just log the error
         }
 
-        toast.success(`Loyalty pass issued successfully`);
-        setRecipientAddress('');
+        toast.success(`Loyalty pass issued successfully to ${recipientEmail.trim()}`);
+        setRecipientEmail('');
         await getUsers();
 
       } else if (action === 'gift') {
-        if (!passAddress.trim() || !points.trim()) {
-          toast.error('Please enter both pass address and points');
+        if (!userEmail.trim() || !points.trim()) {
+          toast.error('Please enter both user email and points');
           return;
         }
 
@@ -280,16 +332,26 @@ export default function LoyaltyProgramDetailPage() {
           return;
         }
 
-        // Validate the loyalty pass and get its details
-        const passDetails = await getLoyaltyPassDetails(passAddress.trim());
-        if (!passDetails.success || !passDetails.data) {
-          toast.error(passDetails.error || 'Invalid loyalty pass address');
+        // Fetch user wallet address from email
+        const userResult = await getUserByEmail(userEmail.trim());
+        if (!userResult.success || !userResult.user?.walletAddress) {
+          setUserEmail('');
+          toast.error('User not found. Please check the email address or ask the user to create an account first.');
           return;
         }
 
-        // Check if the pass belongs to this loyalty program
-        if (passDetails.data.collectionAddress !== params.collectionAddress) {
-          toast.error('This loyalty pass does not belong to this program');
+        const userWalletAddress = userResult.user.walletAddress;
+
+        // Get loyalty passes for this program and find the one owned by this user
+        const loyaltyPassesResult = await getLoyaltyPassesByProgram(params.collectionAddress as string);
+        if (!loyaltyPassesResult.success || !loyaltyPassesResult.passes) {
+          toast.error('Failed to fetch loyalty passes for this program');
+          return;
+        }
+
+        const userPass = loyaltyPassesResult.passes.find(pass => pass.recipient === userWalletAddress);
+        if (!userPass) {
+          toast.error('No loyalty pass found for this user in this program. Please issue a loyalty pass first.');
           return;
         }
 
@@ -303,7 +365,7 @@ export default function LoyaltyProgramDetailPage() {
         // Create a signer for the gift action using the authority secret key
         const giftSigner = createSignerFromKeypair(context.umi, convertSecretKeyToKeypair(authoritySecretKey));
         const giftParams = {
-          passAddress: passAddress.trim(),
+          passAddress: userPass.passPublicKey,
           pointsToGift,
           signer: giftSigner,
           action: `${reason.trim() || 'No reason provided'}`
@@ -313,8 +375,8 @@ export default function LoyaltyProgramDetailPage() {
         const deductionResult = await awardOrRevokeLoyaltyPoints({
           creatorAddress: user.wallet.address,
           points: pointsToGift,
-          assetAddress: passAddress.trim(),
-          assetOwner: passDetails.data.owner,
+          assetAddress: userPass.passPublicKey,
+          assetOwner: userWalletAddress,
           action: 'REVOKE'
         });
 
@@ -324,15 +386,15 @@ export default function LoyaltyProgramDetailPage() {
         }
         
         await giftPoints(context, giftParams);
-        toast.success(`Points gifted successfully`);
-        setPassAddress('');
+        toast.success(`Points gifted successfully to ${userEmail.trim()}`);
+        setUserEmail('');
         setPoints('');
         setReason('');
         await getUsers();
 
       } else if (action === 'revoke') {
-        if (!passAddress.trim() || !points.trim()) {
-          toast.error('Please enter both pass address and points');
+        if (!userEmail.trim() || !points.trim()) {
+          toast.error('Please enter both user email and points');
           return;
         }
 
@@ -342,17 +404,40 @@ export default function LoyaltyProgramDetailPage() {
           return;
         }
 
+        // Fetch user wallet address from email
+        const userResult = await getUserByEmail(userEmail.trim());
+        if (!userResult.success || !userResult.user?.walletAddress) {
+          setUserEmail('');
+          toast.error('User not found. Please check the email address or ask the user to create an account first.');
+          return;
+        }
+
+        const userWalletAddress = userResult.user.walletAddress;
+
+        // Get loyalty passes for this program and find the one owned by this user
+        const loyaltyPassesResult = await getLoyaltyPassesByProgram(params.collectionAddress as string);
+        if (!loyaltyPassesResult.success || !loyaltyPassesResult.passes) {
+          toast.error('Failed to fetch loyalty passes for this program');
+          return;
+        }
+
+        const userPass = loyaltyPassesResult.passes.find((pass: any) => pass.recipient === userWalletAddress);
+        if (!userPass) {
+          toast.error('No loyalty pass found for this user in this program. Please issue a loyalty pass first.');
+          return;
+        }
+
         // Create a signer for the revoke action using the authority secret key
         const revokeSigner = createSignerFromKeypair(context.umi, convertSecretKeyToKeypair(authoritySecretKey));
         const revokeParams = {
-          passAddress: passAddress.trim(),
+          passAddress: userPass.passPublicKey,
           pointsToRevoke,
           signer: revokeSigner
         };
 
         await revokePoints(context, revokeParams);
-        toast.success(`Points revoked successfully`);
-        setPassAddress('');
+        toast.success(`Points revoked successfully from ${userEmail.trim()}`);
+        setUserEmail('');
         setPoints('');
         await getUsers();
       }
@@ -634,7 +719,7 @@ export default function LoyaltyProgramDetailPage() {
                                 <h4 className="text-sm font-semibold text-white">
                                   {owner.slice(0, 6)}...{owner.slice(-6)}
                                 </h4>
-                                <p className="text-white/60 text-xs">Owner</p>
+                                <MemberEmail owner={owner} emails={memberEmails} />
                               </div>
                             </div>
                             <div className="text-right">
@@ -744,12 +829,13 @@ export default function LoyaltyProgramDetailPage() {
                   {activeTab === 'issue' && (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="recipient" className="text-white text-sm">Recipient Address</Label>
+                        <Label htmlFor="recipient" className="text-white text-sm">Recipient Email</Label>
                         <Input
                           id="recipient"
-                          value={recipientAddress}
-                          onChange={(e) => setRecipientAddress(e.target.value)}
-                          placeholder="Enter wallet address"
+                          type="email"
+                          value={recipientEmail}
+                          onChange={(e) => setRecipientEmail(e.target.value)}
+                          placeholder="Enter email address"
                           className="bg-black/20 border-white/20 text-white placeholder:text-white/40"
                         />
                       </div>
@@ -766,12 +852,13 @@ export default function LoyaltyProgramDetailPage() {
                   {activeTab === 'gift' && (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="passAddress" className="text-white text-sm">Pass Address</Label>
+                        <Label htmlFor="userEmail" className="text-white text-sm">User Email</Label>
                         <Input
-                          id="passAddress"
-                          value={passAddress}
-                          onChange={(e) => setPassAddress(e.target.value)}
-                          placeholder="Enter loyalty pass address"
+                          id="userEmail"
+                          type="email"
+                          value={userEmail}
+                          onChange={(e) => setUserEmail(e.target.value)}
+                          placeholder="Enter user email address"
                           className="bg-black/20 border-white/20 text-white placeholder:text-white/40"
                         />
                       </div>
@@ -809,12 +896,13 @@ export default function LoyaltyProgramDetailPage() {
                   {activeTab === 'revoke' && (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="revokePassAddress" className="text-white text-sm">Pass Address</Label>
+                        <Label htmlFor="revokeUserEmail" className="text-white text-sm">User Email</Label>
                         <Input
-                          id="revokePassAddress"
-                          value={passAddress}
-                          onChange={(e) => setPassAddress(e.target.value)}
-                          placeholder="Enter loyalty pass address"
+                          id="revokeUserEmail"
+                          type="email"
+                          value={userEmail}
+                          onChange={(e) => setUserEmail(e.target.value)}
+                          placeholder="Enter user email address"
                           className="bg-black/20 border-white/20 text-white placeholder:text-white/40"
                         />
                       </div>

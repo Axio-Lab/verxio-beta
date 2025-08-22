@@ -77,6 +77,21 @@ export const getUserByWallet = async (walletAddress: string) => {
   }
 }
 
+export const getUserByEmail = async (email: string) => {
+  try {
+    const user = await prisma.user.findFirst({
+      where: {
+        email: email
+      }
+    })
+
+    return { success: true, user }
+  } catch (error) {
+    console.error('Error fetching user by email:', error)
+    return { success: false, error: 'Failed to fetch user by email' }
+  }
+}
+
 export const getAllUsers = async () => {
   try {
     const users = await prisma.user.findMany({

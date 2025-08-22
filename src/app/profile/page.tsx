@@ -1,10 +1,9 @@
 'use client';
-
 import React, { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Edit3, Save, X, User, Mail, FileText, ArrowLeft } from 'lucide-react';
+import { Edit3, Save, X, User, Mail, FileText, ArrowLeft, Copy } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { Card } from '@/components/ui/card';
@@ -14,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { toast, ToastContainer } from 'react-toastify';
 import { updateUserProfile, getUserByWallet } from '@/app/actions/user';
+import { getUserReferralStats, getOrCreateUserReferralCode, checkSignupBonusEligibility, claimSignupBonus } from '@/app/actions/referral';
 import "react-toastify/dist/ReactToastify.css";
 
 interface UserProfile {
@@ -40,6 +40,12 @@ export default function ProfilePage() {
     bio: '',
     avatar: ''
   });
+  const [referralStats, setReferralStats] = useState<any>(null);
+  const [referralCode, setReferralCode] = useState<string>('');
+  const [currentReferralPage, setCurrentReferralPage] = useState(1);
+  const [referralsPerPage] = useState(5);
+  const [signupBonusEligibility, setSignupBonusEligibility] = useState<any>(null);
+  const [isClaimingBonus, setIsClaimingBonus] = useState(false);
 
   useEffect(() => {
     if (!ready) return;
@@ -49,14 +55,33 @@ export default function ProfilePage() {
       return;
     }
 
-    loadProfile();
+    // Load all data in parallel and only show page when everything is ready
+    const loadAllData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Load all data concurrently
+         await Promise.all([
+          loadProfile(),
+          loadReferralData(),
+          checkSignupBonus()
+        ]);
+        
+        // Only set loading to false when all data is loaded
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadAllData();
   }, [ready, authenticated, user, router]);
 
   const loadProfile = async () => {
     if (!user?.wallet?.address) return;
     
     try {
-      setIsLoading(true);
       const result = await getUserByWallet(user.wallet.address);
       
       if (result.success && result.user) {
@@ -71,8 +96,79 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Error loading profile:', error);
       toast.error('Failed to load profile');
+    }
+  };
+
+  const loadReferralData = async () => {
+    if (!user?.wallet?.address) return;
+    
+    try {
+      // Get or create referral code
+      const codeResult = await getOrCreateUserReferralCode(user.wallet.address);
+      if (codeResult.success && codeResult.referralCode) {
+        setReferralCode(codeResult.referralCode);
+      }
+      
+      // Get referral stats
+      const statsResult = await getUserReferralStats(user.wallet.address);
+      if (statsResult.success) {
+        setReferralStats(statsResult.stats);
+        setCurrentReferralPage(1); // Reset to first page when new data loads
+      }
+    } catch (error) {
+      console.error('Error loading referral data:', error);
+    }
+  };
+
+  const goToReferralPage = (page: number) => {
+    if (page < 1 || !referralStats?.referralsGiven) return;
+    
+    const maxPage = Math.ceil(referralStats.referralsGiven.length / referralsPerPage);
+    if (page > maxPage) return;
+    
+    setCurrentReferralPage(page);
+  };
+
+  const getCurrentReferrals = () => {
+    if (!referralStats?.referralsGiven) return [];
+    
+    const startIndex = (currentReferralPage - 1) * referralsPerPage;
+    const endIndex = startIndex + referralsPerPage;
+    return referralStats.referralsGiven.slice(startIndex, endIndex);
+  };
+
+  const checkSignupBonus = async () => {
+    if (!user?.wallet?.address) return;
+    
+    try {
+      const result = await checkSignupBonusEligibility(user.wallet.address);
+      setSignupBonusEligibility(result);
+    } catch (error) {
+      console.error('Error checking signup bonus:', error);
+      toast.error('Failed to check signup bonus eligibility');
+    }
+  };
+
+  const handleClaimSignupBonus = async () => {
+    if (!user?.wallet?.address) return;
+    
+    setIsClaimingBonus(true);
+    try {
+      const result = await claimSignupBonus(user.wallet.address);
+      if (result.success) {
+        toast.success(result.message);
+        // Refresh referral data to show updated status
+        await loadReferralData();
+        // Check eligibility again to show "already claimed" status
+        await checkSignupBonus();
+      } else {
+        toast.error(result.error || 'Failed to claim signup bonus');
+      }
+    } catch (error) {
+      console.error('Error claiming signup bonus:', error);
+      toast.error('Failed to claim signup bonus');
     } finally {
-      setIsLoading(false);
+      setIsClaimingBonus(false);
     }
   };
 
@@ -124,7 +220,7 @@ export default function ProfilePage() {
     return null;
   }
 
-  if (isLoading) {
+  if (isLoading || !profile || !referralStats || signupBonusEligibility === null) {
     return (
       <AppLayout currentPage="profile">
         <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -138,6 +234,12 @@ export default function ProfilePage() {
   }
 
   return (
+    <>
+    <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        theme="dark"
+      />
     <AppLayout currentPage="profile">
       <div className="max-w-md mx-auto space-y-6">
         {/* Header */}
@@ -214,19 +316,9 @@ export default function ProfilePage() {
                   <Mail className="w-4 h-4" />
                   Email
                 </Label>
-                {isEditing ? (
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="Enter your email"
-                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                  />
-                ) : (
-                  <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-                    <p className="text-white">{profile?.email || 'No email added yet'}</p>
-                  </div>
-                )}
+                <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                  <p className="text-white">{profile?.email || 'No email added yet'}</p>
+                </div>
               </div>
 
               {/* Bio */}
@@ -277,16 +369,152 @@ export default function ProfilePage() {
               </div>
             )}
           </Card>
+
+          {/* Referral Card */}
+          <Card className="bg-black/50 border-white/10 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Referral Program</h2>
+            </div>
+
+            {/* Signup Bonus Claim Section - Only show if not already claimed */}
+            {!signupBonusEligibility?.alreadyClaimed && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg border border-blue-500/20">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-white">Bonus Claim</h3>
+                </div>
+                
+                <p className="text-white/70 text-sm mb-4">
+                  Claim your 500 Verxio credits after depositing at least 5 USDC
+                </p>
+
+                <Button
+                  onClick={handleClaimSignupBonus}
+                  disabled={isClaimingBonus}
+                  className="w-full bg-gradient-to-r from-[#0077b3] to-[#005a8c] hover:from-[#0066a0] hover:to-[#004d7a] text-white"
+                >
+                  {isClaimingBonus ? (
+                    <VerxioLoaderWhite size="sm" />
+                  ) : (
+                    'Claim Bonus'
+                  )}
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-6">
+              {/* Referral Statistics */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div className="text-2xl font-bold text-green-400">
+                    {referralStats?.referralCount || 0}
+                  </div>
+                  <div className="text-white/60 text-sm">Successful Referrals</div>
+                </div>
+                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div className="text-2xl font-bold text-yellow-400">
+                    {referralStats?.pendingReferralCount || 0}
+                  </div>
+                  <div className="text-white/60 text-sm">Pending Referrals</div>
+                </div>
+              </div>
+
+              {/* Referral Link */}
+              <div className="space-y-2">
+                <Label className="text-white/70 text-sm">Referral Link</Label>
+                <div className="flex items-center space-x-2">
+                  <div className="flex-1 p-3 bg-white/5 rounded-lg border border-white/10">
+                    <p className="text-white font-mono text-xs truncate">
+                      {typeof window !== 'undefined' && referralCode 
+                        ? `${window.location.origin}/?ref=${referralCode}` 
+                        : 'Generating referral code...'
+                      }
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (referralCode) {
+                        const referralUrl = `${window.location.origin}/?ref=${referralCode}`;
+                        navigator.clipboard.writeText(referralUrl);
+                        toast.success('Referral link copied!');
+                      }
+                    }}
+                    className="p-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white disabled:opacity-50"
+                    disabled={!referralCode}
+                    title={referralCode ? 'Copy referral link' : 'Generating referral code...'}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-white/50 text-xs">
+                  Share this code with friends to earn 250 Verxio credits when they join and deposit at least $5.
+                </p>
+              </div>
+
+              {/* Referral List */}
+              {referralStats?.referralsGiven && referralStats.referralsGiven.length > 0 && (
+                <div className="space-y-3">
+                  <Label className="text-white/70 text-sm">Your Referrals</Label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {getCurrentReferrals().map((referral: any) => (
+                      <div key={referral.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10">
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            referral.status === 'SUCCESS' ? 'bg-green-400' : 'bg-yellow-400'
+                          }`} />
+                          <div>
+                            <p className="text-white text-sm">
+                              {referral.referredUser.email || referral.referredUser.walletAddress.slice(0, 6) + '...'}
+                            </p>
+                            <p className="text-white/60 text-xs">
+                              {referral.status === 'SUCCESS' ? 'Deposited & Active' : 'Pending Deposit'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-white/60 text-xs">
+                            {new Date(referral.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {referralStats.referralsGiven.length > referralsPerPage && (
+                    <div className="flex flex-col items-center pt-4 border-t border-white/20 space-y-3">
+                      <div className="text-xs text-gray-400">
+                        Page {currentReferralPage} of {Math.ceil(referralStats.referralsGiven.length / referralsPerPage)}
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        {currentReferralPage > 1 && (
+                          <Button
+                            onClick={() => goToReferralPage(currentReferralPage - 1)}
+                            className="bg-gradient-to-r from-[#0088c1] to-[#005a7a] hover:from-[#0077a8] hover:to-[#004d6b] text-white"
+                            size="sm"
+                          >
+                            Previous
+                          </Button>
+                        )}
+                        {currentReferralPage < Math.ceil(referralStats.referralsGiven.length / referralsPerPage) && (
+                          <Button
+                            onClick={() => goToReferralPage(currentReferralPage + 1)}
+                            className="bg-gradient-to-r from-[#00adef] to-[#056f96] hover:from-[#0098d1] hover:to-[#0088c1] text-white"
+                            size="sm"
+                          >
+                            Next
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
         </motion.div>
       </div>
 
-      <div className="fixed bottom-6 right-6 z-30">
-        <ToastContainer 
-          position="bottom-right" 
-          autoClose={3000}
-          theme="dark"
-        />
-      </div>
     </AppLayout>
+    </>
   );
 } 
