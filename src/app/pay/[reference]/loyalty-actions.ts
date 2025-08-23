@@ -1,12 +1,13 @@
 'use server';
 
-import { getLoyaltyProgramByAddress, checkUserLoyaltyProgramMembership } from '@/app/actions/loyalty';
+import { getLoyaltyProgramByAddress, checkUserLoyaltyProgramMembership, getLoyaltyPassDetails } from '@/app/actions/loyalty';
 import { saveLoyaltyPass } from '@/app/actions/loyalty-pass';
 import { initializeVerxio, issueNewLoyaltyPass, giftPoints } from '@/app/actions/verxio';
 import { getVerxioConfig } from '@/app/actions/loyalty';
 import { createSignerFromKeypair, generateSigner, publicKey } from '@metaplex-foundation/umi';
 import { convertSecretKeyToKeypair, uint8ArrayToBase58String } from '@/lib/utils';
 import { getCollectionAuthoritySecretKey } from '@/app/actions/loyalty';
+import { getUserVerxioCreditBalance, awardOrRevokeLoyaltyPoints } from '@/app/actions/verxio-credit';
 
 export interface LoyaltyPurchaseResult {
   success: boolean;
@@ -56,7 +57,7 @@ export const checkUserLoyaltyMembership = async (
 ): Promise<LoyaltyMembershipResult> => {
   try {
     const result = await checkUserLoyaltyProgramMembership(userWallet, loyaltyProgramAddress);
-    
+
     if (result.success) {
       return {
         success: true,
@@ -99,7 +100,7 @@ export const fetchLoyaltyProgramDetails = async (
 ): Promise<LoyaltyProgramDetailsResult> => {
   try {
     const result = await getLoyaltyProgramByAddress(loyaltyProgramAddress);
-    
+
     if (result.success && result.data) {
       return {
         success: true,
@@ -154,6 +155,28 @@ export const awardLoyaltyPointsAfterPurchase = async (
       };
     }
 
+    // Check if the loyalty program creator has sufficient Verxio credits
+    // We need to get the creator address from the program details
+    const creatorAddress = programDetails.creator;
+    if (!creatorAddress) {
+      return {
+        success: false,
+        message: 'Failed to get program creator address',
+        error: 'Creator not found'
+      };
+    }
+
+    // Check if creator has sufficient Verxio credits for both pass issuance (500) and points being awarded
+    const totalCreditsNeeded = 500 + pointsPerPurchase;
+    const creditCheck = await getUserVerxioCreditBalance(creatorAddress);
+    if (!creditCheck.success || (creditCheck.balance || 0) < totalCreditsNeeded) {
+      return {
+        success: false,
+        message: `Insufficient Verxio credits. Program creator needs at least ${totalCreditsNeeded} credits (500 for pass + ${pointsPerPurchase} for points). Current balance: ${creditCheck.balance || 0} credits.`,
+        error: 'Insufficient creator credits'
+      };
+    }
+
     // Get Verxio configuration
     const config = await getVerxioConfig();
     if (!config.rpcEndpoint || !config.privateKey) {
@@ -191,7 +214,7 @@ export const awardLoyaltyPointsAfterPurchase = async (
 
     // Check if user already has a loyalty pass
     const membershipResult = await checkUserLoyaltyProgramMembership(userWallet, loyaltyProgramAddress);
-    
+
     if (membershipResult.success && membershipResult.isMember && membershipResult.membershipData?.assetId) {
       // User is already a member, award points directly
       return await awardPointsToExistingMember(
@@ -199,7 +222,8 @@ export const awardLoyaltyPointsAfterPurchase = async (
         membershipResult.membershipData.assetId,
         pointsPerPurchase,
         authoritySecretKey,
-        'Purchase reward'
+        'Purchase reward',
+        creatorAddress
       );
     } else {
       // User is not a member, issue new pass and award points
@@ -210,7 +234,8 @@ export const awardLoyaltyPointsAfterPurchase = async (
         programDetails,
         pointsPerPurchase,
         authoritySecretKey,
-        purchaseAmount
+        purchaseAmount,
+        creatorAddress
       );
     }
 
@@ -233,12 +258,24 @@ async function awardPointsToExistingMember(
   assetId: string,
   points: number,
   authoritySecretKey: string,
-  reason: string
+  reason: string,
+  creatorAddress: string
 ): Promise<LoyaltyPurchaseResult> {
   try {
+    // Get the loyalty pass details to get the correct asset owner
+    const passDetails = await getLoyaltyPassDetails(assetId);
+    if (!passDetails.success || !passDetails.data) {
+      console.error('Failed to get loyalty pass details:', passDetails.error);
+      return {
+        success: false,
+        message: 'Failed to get loyalty pass details',
+        error: 'Pass details not found'
+      };
+    }
+
     // Create signer for gifting points
     const giftSigner = createSignerFromKeypair(context.umi, convertSecretKeyToKeypair(authoritySecretKey));
-    
+
     const giftParams = {
       passAddress: assetId,
       pointsToGift: points,
@@ -247,6 +284,21 @@ async function awardPointsToExistingMember(
     };
 
     await giftPoints(context, giftParams);
+
+    // Deduct Verxio credits from the program creator equal to the points awarded
+    // Use the actual asset owner from the pass details
+    const deductionResult = await awardOrRevokeLoyaltyPoints({
+      creatorAddress: creatorAddress,
+      points: points,
+      assetAddress: assetId,
+      assetOwner: passDetails.data.owner, // Use the actual pass owner
+      action: 'REVOKE'
+    });
+
+    if (!deductionResult.success) {
+      console.error('Failed to deduct Verxio credits from creator:', deductionResult.error);
+      // Don't fail the entire operation, just log the error
+    }
 
     return {
       success: true,
@@ -274,12 +326,14 @@ async function issuePassAndAwardPoints(
   programDetails: any,
   points: number,
   authoritySecretKey: string,
-  purchaseAmount: number
+  purchaseAmount: number,
+  creatorAddress: string
 ): Promise<LoyaltyPurchaseResult> {
   try {
+
     // Create asset keypair using authority secret key
     const assetKeypair = createSignerFromKeypair(context.umi, convertSecretKeyToKeypair(authoritySecretKey));
-    
+
     const issueParams = {
       collectionAddress: loyaltyProgramAddress,
       recipient: userWallet,
@@ -292,7 +346,25 @@ async function issuePassAndAwardPoints(
 
     // Issue new loyalty pass
     const result = await issueNewLoyaltyPass(context, issueParams);
-    
+
+    // Deduct 500 Verxio credits for issuing the loyalty pass
+    const passIssuanceDeduction = await awardOrRevokeLoyaltyPoints({
+      creatorAddress: creatorAddress,
+      points: 500,
+      assetAddress: loyaltyProgramAddress,
+      assetOwner: creatorAddress,
+      action: 'REVOKE'
+    });
+
+    if (!passIssuanceDeduction.success) {
+      console.error('Failed to deduct Verxio credits for pass issuance:', passIssuanceDeduction.error);
+      return {
+        success: false,
+        message: 'Failed to deduct credits for pass issuance',
+        error: 'Pass issuance credit deduction failed'
+      };
+    }
+
     // Save to database
     const passData = {
       programAddress: loyaltyProgramAddress,
@@ -301,7 +373,8 @@ async function issuePassAndAwardPoints(
       passPrivateKey: uint8ArrayToBase58String(result.asset.secretKey),
       signature: result.signature
     };
-    
+
+
     const saveResult = await saveLoyaltyPass(passData);
     if (!saveResult.success) {
       console.warn('Failed to save loyalty pass to database:', saveResult.error);
@@ -312,7 +385,7 @@ async function issuePassAndAwardPoints(
     await new Promise(resolve => setTimeout(resolve, 20000));
     // Award initial points for the purchase
     const giftSigner = createSignerFromKeypair(context.umi, convertSecretKeyToKeypair(authoritySecretKey));
-    
+
     const giftParams = {
       passAddress: result.asset.publicKey,
       pointsToGift: points,
@@ -323,7 +396,7 @@ async function issuePassAndAwardPoints(
     // Try to gift points with retry mechanism
     let retryCount = 0;
     const maxRetries = 3;
-    
+
     while (retryCount < maxRetries) {
       try {
         await giftPoints(context, giftParams);
@@ -336,6 +409,20 @@ async function issuePassAndAwardPoints(
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
       }
+    }
+
+    // Deduct Verxio credits from the program creator equal to the points awarded
+    const deductionResult = await awardOrRevokeLoyaltyPoints({
+      creatorAddress: creatorAddress,
+      points: points,
+      assetAddress: result.asset.publicKey,
+      assetOwner: userWallet, // This is correct for new passes since userWallet is the recipient
+      action: 'REVOKE'
+    });
+
+    if (!deductionResult.success) {
+      console.error('Failed to deduct Verxio credits from creator:', deductionResult.error);
+      // Don't fail the entire operation, just log the error
     }
 
     return {

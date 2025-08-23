@@ -57,10 +57,67 @@ model User {
   name          String?
   bio           String?
   avatar        String?
+  referralCode  String?  @unique
+  referralCount Int      @default(0)
+  pendingReferralCount Int @default(0)
+  signupBonusClaimed Boolean @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Referral relationships
+  referralsGiven    Referral[] @relation("Referrer")
+  referralsReceived Referral[] @relation("ReferredUser")
+
   @@map("users")
+}
+
+model VerxioCredit {
+  id          String   @id @default(cuid())
+  userAddress String   @unique
+  balance     Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("verxio_credits")
+}
+
+model VerxioCreditHistory {
+  id           String   @id @default(cuid())
+  creator      String
+  points       Int
+  action       String
+  assetAddress String
+  assetOwner   String
+  createdAt    DateTime @default(now())
+
+  @@map("verxio_credit_history")
+}
+
+model LoyaltyProgramClaimStatus {
+  id             String   @id @default(cuid())
+  programAddress String   @unique
+  claimEnabled   Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("loyalty_program_claim_status")
+}
+
+model Referral {
+  id              String        @id @default(cuid())
+  referrerId      String
+  referredUserId  String
+  status          ReferralStatus @default(PENDING)
+  referrerCreditsAwarded Boolean @default(false)
+  referredUserCreditsAwarded Boolean @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  referrer        User          @relation("Referrer", fields: [referrerId], references: [id])
+  referredUser    User          @relation("ReferredUser", fields: [referredUserId], references: [id])
+
+  @@map("referrals")
 }
 
 enum PaymentStatus {
@@ -68,4 +125,9 @@ enum PaymentStatus {
   SUCCESS
   FAILED
   CANCELLED
+}
+
+enum ReferralStatus {
+  PENDING
+  SUCCESS
 }

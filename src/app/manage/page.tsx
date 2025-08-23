@@ -41,7 +41,7 @@ export default function ManageLoyaltyProgram() {
           const result = await getUserLoyaltyPrograms(user.wallet.address);
           
           if (result.success && result.programs) {
-            const uiPrograms: LoyaltyProgram[] = result.programs.map(program => ({
+            const uiPrograms: LoyaltyProgram[] = result.programs.map((program: any) => ({
               id: program.id,
               name: program.programPublicKey,
               programPublicKey: program.programPublicKey

@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
-import { getVerxioConfig, getTotalMembersAcrossPrograms } from './loyalty';
+import { getVerxioConfig, getTotalMembersAcrossPrograms, getUserLoyaltyPasses } from './loyalty';
+import { getUserVerxioCreditBalance } from './verxio-credit';
 
 export interface UserStats {
   usdcBalance: string;
@@ -11,6 +12,7 @@ export interface UserStats {
   totalMembers: number;
   totalRevenue: string;
   totalDiscounts: string;
+  verxioCreditBalance: number;
   recentPayments: Array<{
     amount: string;
     loyaltyDiscount: string;
@@ -101,7 +103,26 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
       return sum + (isNaN(discountAmount) ? 0 : discountAmount);
     }, 0);
 
-    // 6. Get Recent Payment Activity
+    // 6. Get Verxio Credit Balance
+    const verxioCreditResult = await getUserVerxioCreditBalance(userAddress);
+    const verxioCreditBalance = verxioCreditResult.success ? (verxioCreditResult.balance || 0) : 0;
+
+    // 7. Get Verxio Points (from loyalty passes) and add to credits
+    // let verxioPoints = 0;
+    // try {
+    //   const loyaltyPassesResult = await getUserLoyaltyPasses(userAddress);
+    //   if (loyaltyPassesResult.success && loyaltyPassesResult.loyaltyPasses) {
+    //     verxioPoints = loyaltyPassesResult.loyaltyPasses.reduce((total, pass) => total + (pass.xp || 0), 0);
+    //   }
+    // } catch (error) {
+    //   console.log('Verxio points fetch failed:', error);
+    //   verxioPoints = 0;
+    // }
+
+    // 8. Combine Verxio Credits and Points
+    // const totalVerxioBalance = verxioCreditBalance + verxioPoints;
+
+    // 7. Get Recent Payment Activity
     const recentPayments = await prisma.paymentRecord.findMany({
       where: {
         recipient: userAddress,
@@ -132,6 +153,7 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
         minimumFractionDigits: 2, 
         maximumFractionDigits: 2 
       }),
+      verxioCreditBalance,
       recentPayments: recentPayments.map(payment => ({
         ...payment,
         createdAt: payment.createdAt.toISOString()
