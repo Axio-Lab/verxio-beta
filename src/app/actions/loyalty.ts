@@ -1,6 +1,6 @@
 'use server'
 
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults'
 import { publicKey } from '@metaplex-foundation/umi'
 import { VerxioContext, getProgramDetails } from '@verxioprotocol/core'
@@ -153,10 +153,12 @@ export const getLoyaltyProgramUsers = async (collectionAddress: string) => {
 
 export const getTotalMembersAcrossPrograms = async (programAddresses: string[]) => {
   try {
-    let totalMembers = 0;
+    // Use parallel RPC calls instead of sequential
+    const memberPromises = programAddresses.map(addr => getLoyaltyProgramUsers(addr));
+    const results = await Promise.all(memberPromises);
     
-    for (const programAddress of programAddresses) {
-      const result = await getLoyaltyProgramUsers(programAddress);
+    let totalMembers = 0;
+    for (const result of results) {
       if (result.success && result.users) {
         totalMembers += result.users.total;
       }
@@ -213,23 +215,37 @@ export const getUserLoyaltyPasses = async (userWallet: string) => {
     // Filter assets that belong to loyalty programs in our database
     const loyaltyPasses = [];
     
+    // Extract all collection addresses from user assets
+    const collectionAddresses = userAssets
+      .map((asset: any) => {
+        const collectionGroup = asset.grouping?.find((group: any) => group.group_key === 'collection');
+        return collectionGroup?.group_value;
+      })
+      .filter(Boolean); // Remove undefined values
+    
+    // Single batch query for all loyalty programs
+    const loyaltyPrograms = await prisma.loyaltyProgram.findMany({
+      where: {
+        programPublicKey: { in: collectionAddresses }
+      },
+      select: {
+        creator: true,
+        programPublicKey: true
+      }
+    });
+    
+    // Create a map for fast lookup
+    const loyaltyProgramMap = new Map(
+      loyaltyPrograms.map(program => [program.programPublicKey, program])
+    );
+    
+    // Process assets using the pre-fetched programs
     for (const asset of userAssets) {
-      // Check if this asset belongs to a collection (loyalty program)
       if (asset.grouping && asset.grouping.length > 0) {
         const collectionGroup = asset.grouping.find((group: any) => group.group_key === 'collection');
         if (collectionGroup) {
           const collectionAddress = collectionGroup.group_value;
-          
-          // Check if this collection exists in our database
-          const loyaltyProgram = await prisma.loyaltyProgram.findFirst({
-            where: {
-              programPublicKey: collectionAddress
-            },
-            select: {
-              creator: true,
-              programPublicKey: true
-            }
-          });
+          const loyaltyProgram = loyaltyProgramMap.get(collectionAddress);
           
           if (loyaltyProgram) {
             // Extract loyalty pass data from the asset

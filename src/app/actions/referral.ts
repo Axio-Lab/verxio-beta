@@ -1,6 +1,6 @@
 'use server'
 
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 import { giveVerxioCredits } from './verxio-credit'
 import { randomBytes } from 'crypto'
 import { Connection, PublicKey } from '@solana/web3.js'

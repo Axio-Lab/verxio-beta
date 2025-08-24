@@ -1,7 +1,7 @@
 'use server'
 
 import { getUserByEmail } from './user'
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 import { giveVerxioCredits } from './verxio-credit';
 
 export interface SendTokensData {
