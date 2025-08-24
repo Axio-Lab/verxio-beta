@@ -127,7 +127,33 @@ enum PaymentStatus {
   CANCELLED
 }
 
+model TransferRecord {
+  id                    String        @id @default(cuid())
+  senderWalletAddress   String
+  recipientWalletAddress String
+  amount                Float
+  sendType              SendType
+  status                TransferStatus @default(PENDING)
+  transactionHash       String?
+  error                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@map("transfer_records")
+}
+
 enum ReferralStatus {
   PENDING
   SUCCESS
+}
+
+enum SendType {
+  VERXIO
+  EXTERNAL
+}
+
+enum TransferStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }

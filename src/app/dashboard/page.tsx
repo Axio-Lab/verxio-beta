@@ -73,6 +73,10 @@ export default function Dashboard() {
     router.push('/manage');
   };
 
+  const handleSendTokens = () => {
+    router.push('/send');
+  };
+
   const handleCopyAddress = async () => {
     if (user?.wallet?.address) {
       try {
@@ -115,197 +119,227 @@ export default function Dashboard() {
       <AppLayout currentPage="dashboard">
         <div className="max-w-md mx-auto space-y-6">
         {/* Balance Card */}
-        <Card className="bg-gradient-to-br from-black/80 to-black/40 border-white/20 text-white overflow-hidden">
-          <CardContent className="p-0">
-            {/* Main Balance Section */}
-            <div className="p-6 bg-gradient-to-r from-white/5 to-transparent">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <span className="text-sm font-medium text-white/60 uppercase tracking-wider">USDC Balance</span>
-                  <div className="text-3xl font-bold text-white mt-1">
-                    {statsLoading ? (
-                      <Spinner size="md" className="mx-auto" />
-                    ) : (
-                      `$${stats.usdcBalance}`
-                    )}
-                  </div>
-                  {/* <span className="text-xs text-white/40 font-medium">Solana Network</span> */}
+        <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+          {/* Subtle background pattern */}
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/3 via-transparent to-purple-500/3 opacity-40"></div>
+          
+          <CardContent className="p-5 relative z-10">
+            {/* Header with Balance */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-white/70 uppercase tracking-wider">USDC Balance</span>
                 </div>
-                
-                {/* Verxio Credits Badge */}
-                <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-3 py-2">
-                  <div className="w-3 h-3 bg-white rounded-full flex items-center justify-center">
-                    <Image
-                      src="/logo/verxioIconBlack.svg"
-                      alt="Verxio"
-                      width={8}
-                      height={8}
-                      className="w-2 h-2"
-                    />
-                  </div>
-                  <span className="text-xs font-semibold text-white">
-                    {statsLoading ? (
-                      <Spinner size="sm" className="inline" />
-                    ) : (
-                      stats.verxioCreditBalance.toLocaleString()
-                    )}
-                  </span>
+                <div className="text-2xl font-bold text-white">
+                  {statsLoading ? (
+                    <Spinner size="sm" className="mx-auto" />
+                  ) : (
+                    `$${stats.usdcBalance}`
+                  )}
                 </div>
+                {/* <span className="text-xs text-white/50 font-medium">Solana Network</span> */}
               </div>
               
-              {/* Wallet Address */}
-              {user?.wallet?.address && (
-                <div className="flex items-center justify-between p-3 bg-white/5 backdrop-blur-sm rounded-lg border border-white/10">
-                  <span className="text-xs font-mono text-white/70">
+              {/* Verxio Credits Badge */}
+              <div className="flex items-center gap-2 bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-sm border border-blue-500/30 rounded-full px-3 py-1.5">
+                <div className="w-3 h-3 bg-white rounded-full flex items-center justify-center">
+                  <Image
+                    src="/logo/verxioIconBlack.svg"
+                    alt="Verxio"
+                    width={8}
+                    height={8}
+                    className="w-2 h-2"
+                  />
+                </div>
+                <span className="text-xs font-semibold text-white">
+                  {statsLoading ? (
+                    <Spinner size="sm" className="inline" />
+                  ) : (
+                    stats.verxioCreditBalance.toLocaleString()
+                  )}
+                </span>
+                <span className="text-xs text-white/60">Credits</span>
+              </div>
+            </div>
+            
+            {/* Wallet Address */}
+            {user?.wallet?.address && (
+              <div className="flex items-center justify-between p-3 bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
+                  <span className="text-xs font-mono text-white/80">
                     {user.wallet.address.slice(0, 8)}...{user.wallet.address.slice(-6)}
                   </span>
-                  <button
-                    onClick={handleCopyAddress}
-                    className="p-1.5 hover:bg-white/10 rounded-md transition-all duration-200 hover:scale-105"
-                    title="Copy wallet address"
-                  >
-                    {copied ? (
-                      <Check className="w-3.5 h-3.5 text-green-400" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5 text-white/60 hover:text-white" />
-                    )}
-                  </button>
                 </div>
-              )}
+                <button
+                  onClick={handleCopyAddress}
+                  className="p-1.5 hover:bg-white/10 rounded-md transition-all duration-200 hover:scale-105 group"
+                  title="Copy wallet address"
+                >
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-green-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-white/60 group-hover:text-white" />
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Send & Withdraw Actions */}
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={handleSendTokens}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2.5 px-3 rounded-lg font-medium transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-blue-500/25"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                Send
+              </button>
+              <button
+                disabled
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white/60 py-2.5 px-3 rounded-lg font-medium cursor-not-allowed relative shadow-lg"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                </svg>
+                Withdraw
+                <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold shadow-lg">
+                  Coming Soon
+                </span>
+              </button>
             </div>
             
             {/* Stats Grid */}
-            <div className="p-6 pt-0">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 rounded-xl border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300">
-                  <div className="text-2xl font-bold text-white mb-1">
-                    {statsLoading ? (
-                      <Spinner size="sm" className="mx-auto" />
-                    ) : (
-                      stats.loyaltyProgramCount.toLocaleString()
-                    )}
-                  </div>
-                  <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Loyalty Programs</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105">
+                <div className="text-lg font-bold text-blue-400 mb-1">
+                  {statsLoading ? (
+                    <Spinner size="sm" className="mx-auto" />
+                  ) : (
+                    stats.loyaltyProgramCount.toLocaleString()
+                  )}
                 </div>
-                <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 rounded-xl border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300">
-                  <div className="text-2xl font-bold text-white mb-1">
-                    {statsLoading ? (
-                      <Spinner size="sm" className="mx-auto" />
-                    ) : (
-                      stats.totalMembers.toLocaleString()
-                    )}
-                  </div>
-                  <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Total Members</div>
+                <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Loyalty Programs</div>
+              </div>
+              <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105">
+                <div className="text-lg font-bold text-purple-400 mb-1">
+                  {statsLoading ? (
+                    <Spinner size="sm" className="mx-auto" />
+                  ) : (
+                    stats.totalMembers.toLocaleString()
+                  )}
                 </div>
+                <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Total Members</div>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Revenue & Discounts */}
-        <Card className="bg-black/50 border-white/10 text-white">
-          <CardHeader>
-            <CardTitle className="text-lg text-white">Revenue & Discounts</CardTitle>
+        <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+          {/* Subtle background pattern */}
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/3 via-transparent to-blue-500/3 opacity-40"></div>
+          
+          <CardHeader className="relative z-10 pb-3">
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-lg text-white font-semibold">Revenue & Discounts</CardTitle>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative z-10 pt-0">
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-white/5 rounded-lg border border-white/10 text-center">
-                <div className="text-lg font-bold text-green-400">
+              <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105 text-center">
+                <div className="text-lg font-bold text-green-400 mb-1">
                   {statsLoading ? (
                     <Spinner size="sm" className="mx-auto" />
                   ) : (
                     `$${stats.totalRevenue}`
                   )}
                 </div>
-                <div className="text-xs text-gray-300">Total Revenue</div>
+                <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Total Revenue</div>
               </div>
-              <div className="p-3 bg-white/5 rounded-lg border border-white/10 text-center">
-                <div className="text-lg font-bold text-blue-400">
+              <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105 text-center">
+                <div className="text-lg font-bold text-blue-400 mb-1">
                   {statsLoading ? (
                     <Spinner size="sm" className="mx-auto" />
                     ) : (
                     `$${stats.totalDiscounts}`
                   )}
                 </div>
-                <div className="text-xs text-gray-300">Discounts Given</div>
+                <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Discounts Given</div>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Quick Actions */}
-        <Card className="bg-black/50 border-white/10 text-white">
-          <CardHeader>
-            <CardTitle className="text-lg text-white">Quick Actions</CardTitle>
+        <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+          {/* Subtle background pattern */}
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/3 via-transparent to-purple-500/3 opacity-40"></div>
+          
+          <CardHeader className="relative z-10 pb-3">
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-lg text-white font-semibold">Quick Actions</CardTitle>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative z-10 pt-0">
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <button 
                   onClick={handleCreateVoucher}
-                  className="p-4 border border-white/10 rounded-lg hover:bg-white/10 text-left transition-colors"
+                  className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 text-left transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-orange-600 to-orange-800 rounded-lg flex items-center justify-center mb-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-orange-600 to-orange-800 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200 shadow-lg">
                     <Gift className="w-5 h-5 text-white" />
                   </div>
-                  <div className="text-sm font-medium text-white">Loyalty Voucher</div>
-                  <div className="text-xs text-gray-300">Manage loyalty voucher</div>
+                  <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Loyalty Voucher</div>
+                  <div className="text-xs text-white/60 font-medium">Manage loyalty voucher</div>
                 </button>
                 <button 
                   onClick={handleLoyaltyManagement}
-                  className="p-4 border border-white/10 rounded-lg hover:bg-white/10 text-left transition-colors"
+                  className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 text-left transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center mb-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200 shadow-lg">
                     <Users className="w-5 h-5 text-white" />
                   </div>
-                  <div className="text-sm font-medium text-white">Loyalty Program</div>
-                  <div className="text-xs text-gray-300">Manage loyalty program</div>
+                  <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Loyalty Program</div>
+                  <div className="text-xs text-white/60 font-medium">Manage loyalty program</div>
                 </button>
               </div>
-              
-              {/* <button 
-                onClick={() => router.push('/history')}
-                className="w-full p-4 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-medium text-white">Recent Activity</div>
-                    <div className="text-xs text-gray-300">View transaction history</div>
-                  </div>
-                </div>
-              </button> */}
             </div>
           </CardContent>
         </Card>
 
         {/* Recent Activity */}
         {stats.recentPayments.length > 0 && (
-          <Card className="bg-black/50 border-white/10 text-white">
-            <CardHeader>
-              <CardTitle className="text-lg text-white">Recent Activity</CardTitle>
+          <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+            {/* Subtle background pattern */}
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/3 via-transparent to-pink-500/3 opacity-40"></div>
+            
+            <CardHeader className="relative z-10 pb-3">
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-lg text-white font-semibold">Recent Activity</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative z-10 pt-0">
               <div className="space-y-3">
                 {stats.recentPayments.map((payment, index) => (
-                  <div key={index} className="p-3 bg-white/5 rounded-lg border border-white/10">
+                  <div key={index} className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-white mb-1">
                           Payment: {payment.reference.slice(0, 8)}...
                         </div>
-                        <div className="text-xs text-gray-300">
+                        <div className="text-xs text-white/60 font-medium uppercase tracking-wider">
                           {new Date(payment.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-bold text-green-400">
+                        <div className="text-sm font-bold text-green-400 mb-1">
                           ${parseFloat(payment.amount).toLocaleString()}
                         </div>
                         {payment.loyaltyDiscount !== '0' && (
-                          <div className="text-xs text-blue-400">
+                          <div className="text-xs text-blue-400 font-medium">
                             -${payment.loyaltyDiscount} discount
                           </div>
                         )}

@@ -102,25 +102,32 @@ export default function ManageLoyaltyProgram() {
     <AppLayout currentPage="dashboard">
       <div className="max-w-md mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-2">Loyalty Management</h1>
-          <p className="text-sm text-gray-400">Manage your loyalty programs and customer rewards</p>
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-white mb-4 bg-gradient-to-r from-white to-white/80 bg-clip-text">
+            Loyalty Management
+          </h1>
+          <p className="text-sm text-white/60 max-w-2xl mx-auto leading-relaxed">
+            Manage your loyalty programs and customer rewards
+          </p>
         </div>
 
         {/* Quick Actions */}
-        <Card className="bg-black/50 border-white/10 text-white">
-          <CardContent>
-            <div className="space-y-3">
+        <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+          {/* Subtle background pattern */}
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/3 via-transparent to-blue-500/3 opacity-40"></div>
+          
+          <CardContent className="relative z-10 p-6">
+            <div className="space-y-4">
               <button 
                 onClick={handleCreateLoyalty}
-                className="w-full p-4 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
+                className="w-full p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-green-800 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-green-800 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-lg">
                     <Plus className="w-5 h-5 text-white" />
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-medium text-white">Create Loyalty Program</div>
+                    <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Create Loyalty Program</div>
                     <div className="text-xs text-gray-300">Build new loyalty programs</div>
                   </div>
                 </div>
@@ -128,14 +135,14 @@ export default function ManageLoyaltyProgram() {
               
               <button 
                 onClick={handleViewPasses}
-                className="w-full p-4 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
+                className="w-full p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-lg">
                     <CreditCard className="w-5 h-5 text-white" />
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-medium text-white">View Loyalty Passes</div>
+                    <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">View Loyalty Passes</div>
                     <div className="text-xs text-gray-300">See all issued passes</div>
                   </div>
                 </div>
@@ -145,22 +152,28 @@ export default function ManageLoyaltyProgram() {
         </Card>
 
         {/* Loyalty Programs */}
-        <Card className="bg-black/50 border-white/10 text-white">
-          <CardHeader>
-            <CardTitle className="text-lg text-white">My Loyalty Programs</CardTitle>
+        <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+          {/* Subtle background pattern */}
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/3 via-transparent to-purple-500/3 opacity-40"></div>
+          
+          <CardHeader className="relative z-10 pb-3">
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-lg text-white font-semibold">My Loyalty Programs</CardTitle>
+            </div>
           </CardHeader>
-          <CardContent>
+          
+          <CardContent className="relative z-10 pt-0">
             {isLoadingPrograms ? (
               <div className="flex items-center justify-center py-12">
                 <VerxioLoaderWhite size="md" />
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {loyaltyPrograms.length > 0 ? (
                   loyaltyPrograms.map((program) => (
                     <div 
                       key={program.id} 
-                      className="p-4 border border-white/10 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                      className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-sm cursor-pointer group"
                       onClick={() => {
                         if (program.programDetails?.collectionAddress) {
                           // Store program details in sessionStorage for the detail page
@@ -171,26 +184,26 @@ export default function ManageLoyaltyProgram() {
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-orange-600 to-orange-800 rounded-lg flex items-center justify-center">
+                          <div className="w-8 h-8 bg-gradient-to-br from-orange-600 to-orange-800 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-lg">
                             <Gift className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <div className="text-sm font-medium text-white">{program.name}</div>
+                            <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">{program.name}</div>
                             <div className="text-xs text-blue-400">
                               {program.programDetails?.numMinted} members • {program.programDetails?.tiers?.length} reward tiers
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-xs text-green-400">Active</div>
+                          <div className="text-xs text-green-400 font-medium">Active</div>
                         </div>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-8 text-gray-400">
+                  <div className="text-center py-8 text-white/60">
                     <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm">No loyalty programs yet</p>
+                    <p className="text-sm font-medium">No loyalty programs yet</p>
                     <p className="text-xs">Create your first program to get started</p>
                   </div>
                 )}
