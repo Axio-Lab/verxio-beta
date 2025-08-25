@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "npx prisma generate && next build",
     "start": "npx prisma migrate deploy && next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "npx prisma generate"
   },
   "dependencies": {
     "@metaplex-foundation/umi": "^1.2.0",
