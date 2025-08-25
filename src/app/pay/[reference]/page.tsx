@@ -849,12 +849,12 @@ const Page = () => {
                 </button>
               ) : (
                 <button
-                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${isProcessing || isCheckingLoyalty || !loyaltyProgramDetails
+                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${isProcessing || isCheckingLoyalty || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails)
                     ? 'bg-gray-500 cursor-not-allowed opacity-50'
                     : 'bg-[#00adef] cursor-pointer hover:opacity-80'
                     }`}
                   onClick={CreateTransfer}
-                  disabled={isProcessing || isCheckingLoyalty || !loyaltyProgramDetails}
+                  disabled={isProcessing || isCheckingLoyalty || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails)}
                 >
                   {isProcessing ? (
                     <>
@@ -864,9 +864,9 @@ const Page = () => {
                   ) : isCheckingLoyalty ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Checking eligibile rewards
+                      Checking eligible rewards
                     </>
-                  ) : !loyaltyProgramDetails ? (
+                  ) : (!!data.loyaltyProgramAddress && !loyaltyProgramDetails) ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Loading Program...

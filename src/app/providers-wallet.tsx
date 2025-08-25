@@ -3,17 +3,16 @@
 import { PrivyProvider } from '@privy-io/react-auth';
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function WalletProviders({ children }: { children: React.ReactNode }) {
     return (
         <PrivyProvider
             appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}
             config={{
-
-                loginMethods: ['google', 'email'], // Only email and Google
+                loginMethods: ['google', 'email', 'wallet'],
                 appearance: {
                     theme: '#ffffff',
                     accentColor: '#000000',
-                    showWalletLoginFirst: false,
+                    showWalletLoginFirst: true, // Show wallet first for payment pages
                     logo: "/logo/verxioLogoMain.svg",
                     walletChainType: "solana-only",
                     walletList: [
@@ -35,4 +34,4 @@ export function Providers({ children }: { children: React.ReactNode }) {
             {children}
         </PrivyProvider>
     );
-} 
+}
