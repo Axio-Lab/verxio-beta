@@ -11,6 +11,7 @@ import { Tiles } from "@/components/layout/backgroundTiles";
 import { VerxioLoaderWhite } from "@/components/ui/verxio-loader-white";
 import { Transaction, Connection } from "@solana/web3.js";
 import { awardLoyaltyPointsAfterPurchase, checkUserLoyaltyMembership, fetchLoyaltyProgramDetails } from "./loyalty-actions";
+import { updatePaymentStatus } from "@/app/actions/payment";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -73,15 +74,15 @@ const Page = () => {
     async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`${BASE_URL}/api/payment?reference=${params.reference}`);
-        if (!res.ok) {
-          console.log("Failed to fetch payment data");
+        const { getPaymentByReference } = await import('@/app/actions/payment');
+        const result = await getPaymentByReference(params.reference as string);
+        if (!result.success) {
+          console.log("Failed to fetch payment data:", result.error);
           setIsLoading(false);
           return;
         }
 
-        const response = await res.json();
-        setData(response);
+        setData(result.payment);
 
       } catch (err) {
         console.log("failed", err);
@@ -166,9 +167,10 @@ const Page = () => {
 
     const checkStatusInterval = setInterval(async () => {
       try {
-        const res = await fetch(`${BASE_URL}/api/payment?reference=${data.reference}`);
-        if (res.ok) {
-          const updatedData = await res.json();
+        const { getPaymentByReference } = await import('@/app/actions/payment');
+        const result = await getPaymentByReference(data.reference);
+        if (result.success) {
+          const updatedData = result.payment;
           if (updatedData.status !== data.status) {
             setData(updatedData);
 
@@ -201,9 +203,10 @@ const Page = () => {
       }
       statusCheckTimeout.current = setTimeout(async () => {
         try {
-          const res = await fetch(`${BASE_URL}/api/payment?reference=${data.reference}`);
-          if (res.ok) {
-            const updatedData = await res.json();
+          const { getPaymentByReference } = await import('@/app/actions/payment');
+          const result = await getPaymentByReference(data.reference);
+          if (result.success) {
+            const updatedData = result.payment;
             if (updatedData.status !== data.status) {
               setData(updatedData);
             }
@@ -267,22 +270,19 @@ const Page = () => {
       }
 
       // Step 1: Get transaction from backend with updated amount
-      const txResponse = await fetch('/api/payment/build-transaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reference: data.reference,
-          amount: finalAmount.toString(),
-          recipient: data.recipient,
-          userWallet: user.wallet.address
-        })
+      const { buildPaymentTransaction } = await import('@/app/actions/payment');
+      const buildResult = await buildPaymentTransaction({
+        reference: data.reference,
+        amount: finalAmount.toString(),
+        recipient: data.recipient,
+        userWallet: user.wallet.address
       });
 
-      if (!txResponse.ok) {
-        throw new Error('Failed to build transaction');
+      if (!buildResult.success || !buildResult.transaction) {
+        throw new Error(buildResult.error || 'Failed to build transaction');
       }
 
-      const { transaction: serializedTx, connection: connectionConfig } = await txResponse.json();
+      const { transaction: serializedTx, connection: connectionConfig } = buildResult;
 
       // Step 2: User signs and sends transaction using Privy Solana wallet
       const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
@@ -313,16 +313,17 @@ const Page = () => {
             }
           }
 
-          await fetch(`/api/payment/${data.reference}/status`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              status: "SUCCESS",
-              signature: result.signature,
-              loyaltyDiscount: discountAmountForDB,
-              amount: finalAmount.toString()
-            }),
+          // Use server action instead of API route
+          const updateResult = await updatePaymentStatus(data.reference, {
+            status: "SUCCESS",
+            signature: result.signature,
+            loyaltyDiscount: discountAmountForDB,
+            amount: finalAmount.toString()
           });
+
+          if (!updateResult.success) {
+            console.error("Failed to update payment status:", updateResult.error);
+          }
         } catch (error) {
           console.error("Failed to update payment status:", error);
           // Don't fail the payment if status update fails

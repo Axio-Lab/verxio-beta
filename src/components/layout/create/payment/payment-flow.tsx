@@ -41,35 +41,21 @@ export function PaymentFlow({ onClose }: PaymentFlowProps) {
         throw new Error('No wallet connected');
       }
 
-      // Call the actual API to create a real payment
-      const response = await fetch('/api/payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          recipientAddress: user.wallet.address,
-          amount: data.amount,
-          paymentId: data.paymentId,
-          message: data.message,
-          label: 'Verxio Checkout',
-          loyaltyDetails: data.loyaltyDetails
-        }),
+      // Call the server action to create a real payment
+      const { createPayment } = await import('@/app/actions/payment');
+      const paymentResult = await createPayment({
+        recipientAddress: user.wallet.address,
+        amount: data.amount,
+        loyaltyDetails: data.loyaltyDetails
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create payment');
-      }
-
-      const paymentResult = await response.json();
-      
-      if (!paymentResult.reference) {
+      if (!paymentResult.success || !paymentResult.payment?.reference) {
         console.error('No reference in payment result:', paymentResult);
-        throw new Error('Payment reference not found in response');
+        throw new Error(paymentResult.error || 'Payment reference not found in response');
       }
       
       // Redirect to the actual payment reference page
-      router.push(`/payment/${paymentResult.reference}`);
+      router.push(`/payment/${paymentResult.payment.reference}`);
       
     } catch (error) {
       console.error('Failed to generate payment:', error);

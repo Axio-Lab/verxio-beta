@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 interface LoyaltyProgram {
   id: string;
   name: string;
+  address: string;
   discount: number;
   tier: string;
   description: string;
@@ -47,30 +48,24 @@ export default function SolanaPayIntegration({ paymentData, onBack }: SolanaPayI
     setError(null);
 
     try {
-      const response = await fetch('/api/payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          recipientAddress: user.wallet.address,
-          amount: paymentData.amount,
-          label: 'Verxio Checkout',
-          message: paymentData.message,
-          memo: `Payment for ${paymentData.paymentId}`,
-          paymentId: paymentData.paymentId,
-        }),
+      const { createPayment } = await import('@/app/actions/payment');
+      const result = await createPayment({
+        recipientAddress: user.wallet.address,
+        amount: paymentData.amount,
+        loyaltyDetails: {
+          loyaltyProgramAddress: paymentData.loyaltyProgram?.address,
+          loyaltyProgramName: paymentData.loyaltyProgram?.name,
+          loyaltyDiscount: paymentData.loyaltyProgram?.discount?.toString()
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create payment');
       }
-
-      const result = await response.json();
       console.log('🎉 Payment generated successfully:', result);
 
       // Redirect to the payment page with the reference
-      router.push(`/payment/${result.reference}`);
+      router.push(`/payment/${result.payment.reference}`);
 
     } catch (err) {
       console.error('❌ Error generating payment:', err);

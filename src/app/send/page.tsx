@@ -56,28 +56,18 @@ export default function SendPage() {
         senderWalletAddress: user.wallet.address
       });
 
-      if (result.success) {
+      if (result.success && result.recipientWalletAddress) {
         try {
-          // Build the transfer transaction using existing payment API
-          const buildResponse = await fetch('/api/payment/build-transaction', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              reference: `transfer_${result.transferId}`,
-              amount: amount,
-              recipient: result.recipientWalletAddress,
-              userWallet: user.wallet.address
-            })
+          // Build the transfer transaction using server action
+          const { buildPaymentTransaction } = await import('@/app/actions/payment');
+          const buildResult = await buildPaymentTransaction({
+            reference: `transfer_${result.transferId}`,
+            amount: amount,
+            recipient: result.recipientWalletAddress,
+            userWallet: user.wallet.address
           });
 
-          if (!buildResponse.ok) {
-            const errorData = await buildResponse.json();
-            throw new Error(errorData.error || 'Failed to build transaction');
-          }
-
-          const buildResult = await buildResponse.json();
-
-          if (!buildResult.success) {
+          if (!buildResult.success || !buildResult.transaction) {
             throw new Error(buildResult.error || 'Failed to build transaction');
           }
 
