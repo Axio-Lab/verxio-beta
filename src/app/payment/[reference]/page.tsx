@@ -8,6 +8,7 @@ import { VerxioLoaderWhite } from "@/components/ui/verxio-loader-white";
 import { CloseButton } from "@/components/ui/close-button";
 import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
+import { updatePaymentStatus } from '@/app/actions/payment';
 import "react-toastify/dist/ReactToastify.css";
 
 interface PaymentData {
@@ -119,25 +120,17 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
     
     try {
       // Update payment status to CANCELLED BEFORE changing any state
-      const response = await fetch(`/api/payment/${reference}/status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: 'CANCELLED'
-        }),
+      const updateResult = await updatePaymentStatus(reference, {
+        status: 'CANCELLED'
       });
 
-      if (response.ok) {
+      if (updateResult.success) {
         toast.success('Payment link expired and cancelled', {
           position: "top-right",
           autoClose: 3000,
         });
       } else {
-        console.error('Failed to update expired payment status');
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
+        console.error('Failed to update expired payment status:', updateResult.error);
         toast.error('Failed to update payment status', {
           position: "top-right",
           autoClose: 3000,
@@ -186,42 +179,34 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
       try {
         setVerificationStatus('verifying');
         
-        const response = await fetch(`/api/verify-payment?reference=${payment.reference}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
+        const { verifyPayment } = await import('@/app/actions/payment');
+        const result = await verifyPayment(payment.reference);
         
-        if (response.ok) {
-          const result: VerificationResult = await response.json();
+        if (result.success && result.verified && result.reference) {
+          setVerificationStatus('completed');
+          setVerificationResult(result as VerificationResult);
+          isPollingActive.current = false;
+          clearInterval(interval);
           
-          if (result.verified) {
-            setVerificationStatus('completed');
-            setVerificationResult(result);
-            isPollingActive.current = false;
-            clearInterval(interval);
-            
-            // Stop expiration timer when payment is completed
-            if (expirationIntervalRef.current) {
-              clearInterval(expirationIntervalRef.current);
-            }
-            
-            // Payment verification completed successfully
-            
-            // Start countdown
-            let secondsLeft = 5;
-            const countdownInterval = setInterval(() => {
-              secondsLeft -= 1;
-              setCountdown(secondsLeft);
-              
-              if (secondsLeft <= 0) {
-                clearInterval(countdownInterval);
-                routerRef.current.push('/dashboard');
-              }
-            }, 1000);
-            
-          } else {
-            setVerificationStatus('waiting');
+          // Stop expiration timer when payment is completed
+          if (expirationIntervalRef.current) {
+            clearInterval(expirationIntervalRef.current);
           }
+          
+          // Payment verification completed successfully
+          
+          // Start countdown
+          let secondsLeft = 5;
+          const countdownInterval = setInterval(() => {
+            secondsLeft -= 1;
+            setCountdown(secondsLeft);
+            
+            if (secondsLeft <= 0) {
+              clearInterval(countdownInterval);
+              routerRef.current.push('/dashboard');
+            }
+          }, 1000);
+          
         } else {
           setVerificationStatus('waiting');
         }
@@ -261,19 +246,12 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
     
     try {
       // Update payment status to CANCELLED
-      const response = await fetch(`/api/payment/${reference}/status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: 'CANCELLED'
-        }),
+      const updateResult = await updatePaymentStatus(reference, {
+        status: 'CANCELLED'
       });
 
-      if (response.ok) {
-      } else {
-        console.error('Failed to update payment status');
+      if (!updateResult.success) {
+        console.error('Failed to update payment status:', updateResult.error);
       }
     } catch (error) {
       console.error('Error updating payment status:', error);
@@ -289,13 +267,14 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
       try {
         const resolvedParams = await params;
         const ref = resolvedParams.reference;
-        const response = await fetch(`/api/payment?reference=${ref}`);
+        const { getPaymentByReference } = await import('@/app/actions/payment');
+        const result = await getPaymentByReference(ref);
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to fetch payment');
         }
         
-        const data = await response.json();
+        const data = result.payment;
         setPaymentData(data);
         
         // Store reference in ref to prevent it from becoming undefined
