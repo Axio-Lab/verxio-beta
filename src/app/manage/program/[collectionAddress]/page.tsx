@@ -349,7 +349,7 @@ export default function LoyaltyProgramDetailPage() {
           return;
         }
 
-        const userPass = loyaltyPassesResult.passes.find(pass => pass.recipient === userWalletAddress);
+        const userPass = loyaltyPassesResult.passes.find((pass: any) => pass.recipient === userWalletAddress);
         if (!userPass) {
           toast.error('No loyalty pass found for this user in this program. Please issue a loyalty pass first.');
           return;

@@ -1,6 +1,6 @@
 'use server'
 
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 
 export interface CreateUserData {
   walletAddress: string
@@ -30,6 +30,20 @@ export const createOrUpdateUser = async (data: CreateUserData) => {
         walletAddress: data.walletAddress,
         email: data.email,
         name: data.name
+      },
+      select: {
+        id: true,
+        walletAddress: true,
+        email: true,
+        name: true,
+        bio: true,
+        avatar: true,
+        referralCode: true,
+        referralCount: true,
+        pendingReferralCount: true,
+        signupBonusClaimed: true,
+        createdAt: true,
+        updatedAt: true
       }
     })
     return { success: true, user }
@@ -52,6 +66,20 @@ export const updateUserProfile = async (walletAddress: string, data: UpdateUserD
       data: {
         ...data,
         updatedAt: new Date()
+      },
+      select: {
+        id: true,
+        walletAddress: true,
+        email: true,
+        name: true,
+        bio: true,
+        avatar: true,
+        referralCode: true,
+        referralCount: true,
+        pendingReferralCount: true,
+        signupBonusClaimed: true,
+        createdAt: true,
+        updatedAt: true
       }
     })
 
@@ -67,6 +95,20 @@ export const getUserByWallet = async (walletAddress: string) => {
     const user = await prisma.user.findUnique({
       where: {
         walletAddress: walletAddress
+      },
+      select: {
+        id: true,
+        walletAddress: true,
+        email: true,
+        name: true,
+        bio: true,
+        avatar: true,
+        referralCode: true,
+        referralCount: true,
+        pendingReferralCount: true,
+        signupBonusClaimed: true,
+        createdAt: true,
+        updatedAt: true
       }
     })
 
@@ -82,6 +124,12 @@ export const getUserByEmail = async (email: string) => {
     const user = await prisma.user.findFirst({
       where: {
         email: email
+      },
+      select: {
+        id: true,
+        walletAddress: true,
+        email: true,
+        name: true
       }
     })
 
@@ -95,6 +143,20 @@ export const getUserByEmail = async (email: string) => {
 export const getAllUsers = async () => {
   try {
     const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        walletAddress: true,
+        email: true,
+        name: true,
+        bio: true,
+        avatar: true,
+        referralCode: true,
+        referralCount: true,
+        pendingReferralCount: true,
+        signupBonusClaimed: true,
+        createdAt: true,
+        updatedAt: true
+      },
       orderBy: {
         createdAt: 'desc'
       }

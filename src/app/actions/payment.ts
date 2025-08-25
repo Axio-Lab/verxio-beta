@@ -1,6 +1,6 @@
 'use server'
 
-import prisma from '@/lib/prisma'
+import { prisma }from '@/lib/prisma'
 
 export interface UpdatePaymentStatusData {
   status: 'SUCCESS' | 'FAILED' | 'CANCELLED'
@@ -18,14 +18,18 @@ export const updatePaymentStatus = async (
       return { success: false, error: 'Payment reference is required' }
     }
 
-    // Update payment status
-    const updatedPayment = await prisma.paymentRecord.update({
+    // Update payment status - only select fields we need
+    await prisma.paymentRecord.update({
       where: { reference },
       data: {
         status: data.status,
         signature: data.signature || null,
         loyaltyDiscount: data.loyaltyDiscount || '0',
         amount: data.amount || undefined
+      },
+      select: {
+        reference: true,
+        status: true
       }
     })
 
@@ -52,7 +56,21 @@ export const getPaymentByReference = async (
     }
 
     const payment = await prisma.paymentRecord.findUnique({
-      where: { reference }
+      where: { reference },
+      select: {
+        id: true,
+        reference: true,
+        amount: true,
+        recipient: true,
+        splToken: true,
+        status: true,
+        signature: true,
+        loyaltyProgramAddress: true,
+        loyaltyProgramName: true,
+        loyaltyDiscount: true,
+        createdAt: true,
+        updatedAt: true
+      }
     })
 
     if (!payment) {
@@ -91,7 +109,7 @@ export const createPayment = async (
     // Generate a unique reference 
     const ref = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10)
 
-    // Store payment record in Prisma database
+    // Store payment record in Prisma database - only select fields we need
     const paymentRecord = await prisma.paymentRecord.create({
       data: {
         reference: ref,
@@ -103,6 +121,16 @@ export const createPayment = async (
         loyaltyProgramName: data.loyaltyDetails?.loyaltyProgramName || null,
         loyaltyDiscount: data.loyaltyDetails?.loyaltyDiscount || '0',
       },
+      select: {
+        reference: true,
+        amount: true,
+        recipient: true,
+        status: true,
+        loyaltyProgramAddress: true,
+        loyaltyProgramName: true,
+        loyaltyDiscount: true,
+        createdAt: true
+      }
     })
 
     return { 

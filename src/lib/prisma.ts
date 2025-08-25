@@ -1,17 +1,21 @@
 import { PrismaClient } from '@prisma/client'
 import { fieldEncryptionExtension } from 'prisma-field-encryption'
-import { withOptimize } from "@prisma/extension-optimize";
+// import { withOptimize } from "@prisma/extension-optimize";
 
-const prisma = new PrismaClient()
+const globalForPrisma = globalThis as unknown as {
+  prisma: any | undefined
+}
 
-// Add encryption extension
-prisma.$extends(
+export const prisma = globalForPrisma.prisma ?? new PrismaClient().$extends(
   fieldEncryptionExtension({
-    encryptionKey: process.env.PRISMA_FIELD_ENCRYPTION_KEY,
+    encryptionKey: process.env.PRISMA_FIELD_ENCRYPTION_KEY!,
   })
 )
 
-// Add optimize extension
-prisma.$extends(withOptimize({ apiKey: process.env.OPTIMIZE_API_KEY! }))
+// .$extends(withOptimize({ apiKey: process.env.OPTIMIZE_API_KEY! }))
 
-export default prisma
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma 
+ globalForPrisma.prisma = prisma 
+
+// export default prisma

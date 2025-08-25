@@ -57,7 +57,7 @@ export function PaymentGenerator({ onGenerate, onClose }: PaymentGeneratorProps)
           
           if (result.success && result.programs) {
 
-            const uiPrograms: LoyaltyProgram[] = result.programs.map(program => ({
+            const uiPrograms: LoyaltyProgram[] = result.programs.map((program: any) => ({
               id: program.id,
               name: `Loading...`,
               programPublicKey: program.programPublicKey

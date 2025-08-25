@@ -289,7 +289,7 @@ export default function ProfilePage() {
                 <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm">
                   <p className="text-white font-mono text-sm">
                     {profile?.walletAddress ? 
-                      `${profile.walletAddress.slice(0, 6)}...${profile.walletAddress.slice(-4)}` : 
+                      `${profile.walletAddress.slice(0, 15)}...${profile.walletAddress.slice(-10)}` : 
                       'Not available'
                     }
                   </p>
