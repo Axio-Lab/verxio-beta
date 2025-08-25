@@ -262,25 +262,31 @@ export default function ProfilePage() {
           className="space-y-6"
         >
           {/* Profile Card */}
-          <Card className="bg-black/50 border-white/10 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Personal Information</h2>
-              {!isEditing ? (
-                <Button
-                  onClick={() => setIsEditing(true)}
-                  className="bg-[#0077b3] hover:bg-[#005a8c] text-white"
-                >
-                  <Edit3 className="w-4 h-4 mr-2" />
-                  Edit
-                </Button>
-              ) : null}
-            </div>
+          <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+            {/* Subtle background pattern */}
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/3 via-transparent to-purple-500/3 opacity-40"></div>
+            
+            <div className="relative z-10 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-white">Personal Information</h2>
+                </div>
+                {!isEditing ? (
+                  <Button
+                    onClick={() => setIsEditing(true)}
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white transition-all duration-200 hover:scale-105 shadow-lg"
+                  >
+                    <Edit3 className="w-4 h-4 mr-2" />
+                    Edit
+                  </Button>
+                ) : null}
+              </div>
 
             <div className="space-y-6">
               {/* Wallet Address (Read-only) */}
-              <div className="space-y-2">
-                <Label className="text-white/70 text-sm">Wallet Address</Label>
-                <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+              <div className="space-y-3">
+                <Label className="text-white/80 text-sm font-medium uppercase tracking-wider">Wallet Address</Label>
+                <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm">
                   <p className="text-white font-mono text-sm">
                     {profile?.walletAddress ? 
                       `${profile.walletAddress.slice(0, 6)}...${profile.walletAddress.slice(-4)}` : 
@@ -291,8 +297,8 @@ export default function ProfilePage() {
               </div>
 
               {/* Name */}
-              <div className="space-y-2">
-                <Label className="text-white/70 text-sm flex items-center gap-2">
+              <div className="space-y-3">
+                <Label className="text-white/80 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
                   <User className="w-4 h-4" />
                   Name
                 </Label>
@@ -301,29 +307,29 @@ export default function ProfilePage() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Enter your name"
-                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                    className="bg-white/5 border border-white/15 text-white placeholder:text-white/40 rounded-lg h-12 px-4 focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200"
                   />
                 ) : (
-                  <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                  <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm">
                     <p className="text-white">{profile?.name || 'No name added yet'}</p>
                   </div>
                 )}
               </div>
 
               {/* Email */}
-              <div className="space-y-2">
-                <Label className="text-white/70 text-sm flex items-center gap-2">
+              <div className="space-y-3">
+                <Label className="text-white/80 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
                   <Mail className="w-4 h-4" />
                   Email
                 </Label>
-                <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm">
                   <p className="text-white">{profile?.email || 'No email added yet'}</p>
                 </div>
               </div>
 
               {/* Bio */}
-              <div className="space-y-2">
-                <Label className="text-white/70 text-sm flex items-center gap-2">
+              <div className="space-y-3">
+                <Label className="text-white/80 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   Bio
                 </Label>
@@ -333,10 +339,10 @@ export default function ProfilePage() {
                     onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                     placeholder="Tell us about yourself..."
                     rows={4}
-                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40 resize-none"
+                    className="bg-white/5 border border-white/15 text-white placeholder:text-white/40 resize-none rounded-lg px-4 py-3 focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200"
                   />
                 ) : (
-                  <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                  <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm">
                     <p className="text-white">{profile?.bio || 'No bio added yet'}</p>
                   </div>
                 )}
@@ -349,7 +355,7 @@ export default function ProfilePage() {
                 <Button
                   onClick={handleCancel}
                   variant="outline"
-                  className="flex-1 border-white/20 text-black hover:bg-white/10"
+                  className="flex-1 border-white/20 text-black hover:bg-white/10 hover:border-white/30 transition-all duration-200"
                 >
                   <X className="w-4 h-4 mr-2" />
                   Cancel
@@ -357,7 +363,7 @@ export default function ProfilePage() {
                 <Button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="flex-1 bg-green-700 hover:bg-green-800 text-white"
+                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white transition-all duration-200 hover:scale-105 shadow-lg"
                 >
                   {isSaving ? (
                     <VerxioLoaderWhite size="sm" />
@@ -368,13 +374,20 @@ export default function ProfilePage() {
                 </Button>
               </div>
             )}
+            </div>
           </Card>
 
           {/* Referral Card */}
-          <Card className="bg-black/50 border-white/10 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Referral Program</h2>
-            </div>
+          <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+            {/* Subtle background pattern */}
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/3 via-transparent to-blue-500/3 opacity-40"></div>
+            
+            <div className="relative z-10 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-white">Referral Program</h2>
+                </div>
+              </div>
 
             {/* Signup Bonus Claim Section - Only show if not already claimed */}
             {!signupBonusEligibility?.alreadyClaimed && (
@@ -404,25 +417,25 @@ export default function ProfilePage() {
             <div className="space-y-6">
               {/* Referral Statistics */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="text-2xl font-bold text-green-400">
+                <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105">
+                  <div className="text-2xl font-bold text-green-400 mb-1">
                     {referralStats?.referralCount || 0}
                   </div>
-                  <div className="text-white/60 text-sm">Successful Referrals</div>
+                  <div className="text-white/60 text-sm font-medium uppercase tracking-wider">Successful Referrals</div>
                 </div>
-                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="text-2xl font-bold text-yellow-400">
+                <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105">
+                  <div className="text-2xl font-bold text-yellow-400 mb-1">
                     {referralStats?.pendingReferralCount || 0}
                   </div>
-                  <div className="text-white/60 text-sm">Pending Referrals</div>
+                  <div className="text-white/60 text-sm font-medium uppercase tracking-wider">Pending Referrals</div>
                 </div>
               </div>
 
               {/* Referral Link */}
-              <div className="space-y-2">
-                <Label className="text-white/70 text-sm">Referral Link</Label>
+              <div className="space-y-3">
+                <Label className="text-white/80 text-sm font-medium uppercase tracking-wider">Referral Link</Label>
                 <div className="flex items-center space-x-2">
-                  <div className="flex-1 p-3 bg-white/5 rounded-lg border border-white/10">
+                  <div className="flex-1 p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm">
                     <p className="text-white font-mono text-xs truncate">
                       {typeof window !== 'undefined' && referralCode 
                         ? `${window.location.origin}/?ref=${referralCode}` 
@@ -438,14 +451,14 @@ export default function ProfilePage() {
                         toast.success('Referral link copied!');
                       }
                     }}
-                    className="p-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white disabled:opacity-50"
+                    className="p-3 bg-gradient-to-r from-white/10 to-white/5 hover:from-white/20 hover:to-white/10 rounded-lg transition-all duration-200 text-white disabled:opacity-50 hover:scale-105 border border-white/15"
                     disabled={!referralCode}
                     title={referralCode ? 'Copy referral link' : 'Generating referral code...'}
                   >
                     <Copy className="w-4 h-4" />
                   </button>
                 </div>
-                <p className="text-white/50 text-xs">
+                <p className="text-white/50 text-xs font-medium">
                   Share this code with friends to earn 250 Verxio credits when they join and deposit at least $5.
                 </p>
               </div>
@@ -456,22 +469,22 @@ export default function ProfilePage() {
                   <Label className="text-white/70 text-sm">Your Referrals</Label>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
                     {getCurrentReferrals().map((referral: any) => (
-                      <div key={referral.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10">
+                      <div key={referral.id} className="flex items-center justify-between p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105">
                         <div className="flex items-center space-x-2">
                           <div className={`w-2 h-2 rounded-full ${
                             referral.status === 'SUCCESS' ? 'bg-green-400' : 'bg-yellow-400'
                           }`} />
                           <div>
-                            <p className="text-white text-sm">
+                            <p className="text-white text-sm font-medium">
                               {referral.referredUser.email || referral.referredUser.walletAddress.slice(0, 6) + '...'}
                             </p>
-                            <p className="text-white/60 text-xs">
+                            <p className="text-white/60 text-xs font-medium uppercase tracking-wider">
                               {referral.status === 'SUCCESS' ? 'Deposited & Active' : 'Pending Deposit'}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-white/60 text-xs">
+                          <p className="text-white/60 text-xs font-medium">
                             {new Date(referral.createdAt).toLocaleDateString()}
                           </p>
                         </div>
@@ -482,14 +495,14 @@ export default function ProfilePage() {
                   {/* Pagination Controls */}
                   {referralStats.referralsGiven.length > referralsPerPage && (
                     <div className="flex flex-col items-center pt-4 border-t border-white/20 space-y-3">
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-white/60 font-medium uppercase tracking-wider">
                         Page {currentReferralPage} of {Math.ceil(referralStats.referralsGiven.length / referralsPerPage)}
                       </div>
                       <div className="flex items-center space-x-4">
                         {currentReferralPage > 1 && (
                           <Button
                             onClick={() => goToReferralPage(currentReferralPage - 1)}
-                            className="bg-gradient-to-r from-[#0088c1] to-[#005a7a] hover:from-[#0077a8] hover:to-[#004d6b] text-white"
+                            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white transition-all duration-200 hover:scale-105 shadow-lg"
                             size="sm"
                           >
                             Previous
@@ -498,7 +511,7 @@ export default function ProfilePage() {
                         {currentReferralPage < Math.ceil(referralStats.referralsGiven.length / referralsPerPage) && (
                           <Button
                             onClick={() => goToReferralPage(currentReferralPage + 1)}
-                            className="bg-gradient-to-r from-[#00adef] to-[#056f96] hover:from-[#0098d1] hover:to-[#0088c1] text-white"
+                            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white transition-all duration-200 hover:scale-105 shadow-lg"
                             size="sm"
                           >
                             Next
@@ -509,6 +522,7 @@ export default function ProfilePage() {
                   )}
                 </div>
               )}
+            </div>
             </div>
           </Card>
         </motion.div>

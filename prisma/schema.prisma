@@ -21,6 +21,11 @@ model PaymentRecord {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
+  // Performance indexes
+  @@index([recipient])               // For recipient queries
+  @@index([status])                  // For status filtering
+  @@index([createdAt])               // For date sorting
+  @@index([loyaltyProgramAddress])   // For loyalty queries
   @@map("payment_records")
 }
 
@@ -36,6 +41,10 @@ model LoyaltyProgram {
   authorityPublicKey String
   /// @encrypted
   authoritySecretKey String
+
+  // Performance indexes
+  @@index([creator])                 // For getUserLoyaltyPrograms
+  @@index([programPublicKey])        // For program lookups
 }
 
 model LoyaltyPass {
@@ -48,6 +57,11 @@ model LoyaltyPass {
   signature      String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  // Performance indexes
+  @@index([programAddress])          // For getLoyaltyPassesByProgram
+  @@index([recipient])               // For getLoyaltyPassByRecipient
+  @@index([recipient, programAddress]) // Composite index for combined queries
 }
 
 model User {
@@ -68,6 +82,10 @@ model User {
   referralsGiven    Referral[] @relation("Referrer")
   referralsReceived Referral[] @relation("ReferredUser")
 
+  // Performance indexes
+  @@index([email])           // For getUserByEmail queries
+  @@index([walletAddress])   // For wallet lookups
+  @@index([referralCode])    // For referral code lookups
   @@map("users")
 }
 
@@ -78,6 +96,8 @@ model VerxioCredit {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Performance indexes
+  @@index([userAddress])             // For credit balance queries
   @@map("verxio_credits")
 }
 
@@ -90,6 +110,9 @@ model VerxioCreditHistory {
   assetOwner   String
   createdAt    DateTime @default(now())
 
+  // Performance indexes
+  @@index([creator])                 // For user credit history
+  @@index([createdAt])               // For date-based queries
   @@map("verxio_credit_history")
 }
 
@@ -100,6 +123,8 @@ model LoyaltyProgramClaimStatus {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Performance indexes
+  @@index([programAddress])          // For claim status lookups
   @@map("loyalty_program_claim_status")
 }
 
@@ -117,6 +142,11 @@ model Referral {
   referrer        User          @relation("Referrer", fields: [referrerId], references: [id])
   referredUser    User          @relation("ReferredUser", fields: [referredUserId], references: [id])
 
+  // Performance indexes
+  @@index([referrerId])        // For referralsGiven queries
+  @@index([referredUserId])    // For referralsReceived queries
+  @@index([status])            // For status filtering
+  @@index([createdAt])         // For date sorting
   @@map("referrals")
 }
 
@@ -127,7 +157,38 @@ enum PaymentStatus {
   CANCELLED
 }
 
+model TransferRecord {
+  id                    String        @id @default(cuid())
+  senderWalletAddress   String
+  recipientWalletAddress String
+  amount                Float
+  sendType              SendType
+  status                TransferStatus @default(PENDING)
+  transactionHash       String?
+  error                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // Performance indexes
+  @@index([senderWalletAddress])     // For sender queries
+  @@index([recipientWalletAddress])  // For recipient queries
+  @@index([status])                  // For status filtering
+  @@index([createdAt])               // For date sorting
+  @@map("transfer_records")
+}
+
 enum ReferralStatus {
   PENDING
   SUCCESS
+}
+
+enum SendType {
+  VERXIO
+  EXTERNAL
+}
+
+enum TransferStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }

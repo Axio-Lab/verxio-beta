@@ -1,6 +1,6 @@
 'use server'
 
-import { prisma } from '@/lib/prisma';
+import prisma from '@/lib/prisma';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
 import { getVerxioConfig, getTotalMembersAcrossPrograms, getUserLoyaltyPasses } from './loyalty';
@@ -18,6 +18,7 @@ export interface UserStats {
     loyaltyDiscount: string;
     createdAt: string;
     reference: string;
+    type: 'payment' | 'transfer';
   }>;
 }
 
@@ -70,7 +71,7 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
       }
     }
 
-    // 4. Get Total Revenue Collected
+    // 4. Get Total Revenue Collected (Payments + Transfers)
     const revenuePayments = await prisma.paymentRecord.findMany({
       where: {
         recipient: userAddress,
@@ -81,7 +82,18 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
       }
     });
 
-    const totalRevenue = revenuePayments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0);
+    const revenueTransfers = await prisma.transferRecord.findMany({
+      where: {
+        recipientWalletAddress: userAddress,
+        status: 'SUCCESS'
+      },
+      select: {
+        amount: true
+      }
+    });
+
+    const totalRevenue = revenuePayments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0) +
+      revenueTransfers.reduce((sum, transfer) => sum + transfer.amount, 0);
 
     // 5. Get Total Discounts Given
     const discountPayments = await prisma.paymentRecord.findMany({
@@ -122,7 +134,7 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
     // 8. Combine Verxio Credits and Points
     // const totalVerxioBalance = verxioCreditBalance + verxioPoints;
 
-    // 7. Get Recent Payment Activity
+    // 7. Get Recent Payment & Transfer Activity
     const recentPayments = await prisma.paymentRecord.findMany({
       where: {
         recipient: userAddress,
@@ -138,25 +150,58 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
       }
     });
 
+    const recentTransfers = await prisma.transferRecord.findMany({
+      where: {
+        recipientWalletAddress: userAddress,
+        status: 'SUCCESS'
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        amount: true,
+        createdAt: true,
+        id: true
+      }
+    });
+
+    // Combine and sort by creation date, take the most recent 5
+    const allRecentActivity = [
+      ...recentPayments.map(payment => ({
+        amount: payment.amount,
+        loyaltyDiscount: payment.loyaltyDiscount,
+        createdAt: payment.createdAt,
+        reference: payment.reference,
+        type: 'payment' as const
+      })),
+      ...recentTransfers.map(transfer => ({
+        amount: transfer.amount.toString(),
+        loyaltyDiscount: '0',
+        createdAt: transfer.createdAt,
+        reference: `transfer_${transfer.id}`,
+        type: 'transfer' as const
+      }))
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+
     const stats: UserStats = {
-      usdcBalance: usdcBalance.toLocaleString('en-US', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
+      usdcBalance: usdcBalance.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }),
       loyaltyProgramCount,
       totalMembers,
-      totalRevenue: totalRevenue.toLocaleString('en-US', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
+      totalRevenue: totalRevenue.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }),
-      totalDiscounts: totalDiscounts.toLocaleString('en-US', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
+      totalDiscounts: totalDiscounts.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }),
       verxioCreditBalance,
-      recentPayments: recentPayments.map(payment => ({
-        ...payment,
-        createdAt: payment.createdAt.toISOString()
+      recentPayments: allRecentActivity.map(activity => ({
+        ...activity,
+        createdAt: activity.createdAt.toISOString()
       }))
     };
 
@@ -164,8 +209,8 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
 
   } catch (error) {
     console.error('Error fetching user stats:', error);
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: 'Failed to fetch user statistics'
     };
   }
