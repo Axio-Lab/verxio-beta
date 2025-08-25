@@ -1,6 +1,6 @@
 'use server'
 
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
 import { getVerxioConfig, getTotalMembersAcrossPrograms, getUserLoyaltyPasses } from './loyalty';
