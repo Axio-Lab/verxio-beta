@@ -236,7 +236,7 @@ export const getUserLoyaltyPasses = async (userWallet: string) => {
     
     // Create a map for fast lookup
     const loyaltyProgramMap = new Map(
-      loyaltyPrograms.map(program => [program.programPublicKey, program])
+      loyaltyPrograms.map((program: any) => [program.programPublicKey, program])
     );
     
     // Process assets using the pre-fetched programs
@@ -254,7 +254,7 @@ export const getUserLoyaltyPasses = async (userWallet: string) => {
               loyaltyPasses.push({
                 assetId: asset.id,
                 collectionAddress: collectionAddress,
-                programCreator: loyaltyProgram.creator,
+                programCreator: loyaltyData.creator,
                 nftName: asset.content?.metadata?.name,
                 organizationName: loyaltyData.organization_name,
                 xp: loyaltyData.xp || 0,

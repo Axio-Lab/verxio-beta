@@ -51,7 +51,7 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
     });
 
     const loyaltyProgramCount = loyaltyPrograms.length;
-    const loyaltyProgramAddresses = loyaltyPrograms.map(p => p.programPublicKey);
+    const loyaltyProgramAddresses = loyaltyPrograms.map((p: any) => p.programPublicKey);
 
     // 3. Get Total Members in All Programs
     let totalMembers = 0;
@@ -92,8 +92,8 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
       }
     });
 
-    const totalRevenue = revenuePayments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0) +
-      revenueTransfers.reduce((sum, transfer) => sum + transfer.amount, 0);
+    const totalRevenue = revenuePayments.reduce((sum: number, payment: any) => sum + parseFloat(payment.amount), 0) +
+      revenueTransfers.reduce((sum: number, transfer: any) => sum + transfer.amount, 0);
 
     // 5. Get Total Discounts Given
     const discountPayments = await prisma.paymentRecord.findMany({
@@ -110,7 +110,7 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
     });
 
     // Simply sum up the actual discount amounts (already calculated)
-    const totalDiscounts = discountPayments.reduce((sum, payment) => {
+    const totalDiscounts = discountPayments.reduce((sum: number, payment: any) => {
       const discountAmount = parseFloat(payment.loyaltyDiscount);
       return sum + (isNaN(discountAmount) ? 0 : discountAmount);
     }, 0);
@@ -166,14 +166,14 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
 
     // Combine and sort by creation date, take the most recent 5
     const allRecentActivity = [
-      ...recentPayments.map(payment => ({
+      ...recentPayments.map((payment: any) => ({
         amount: payment.amount,
         loyaltyDiscount: payment.loyaltyDiscount,
         createdAt: payment.createdAt,
         reference: payment.reference,
         type: 'payment' as const
       })),
-      ...recentTransfers.map(transfer => ({
+      ...recentTransfers.map((transfer: any) => ({
         amount: transfer.amount.toString(),
         loyaltyDiscount: '0',
         createdAt: transfer.createdAt,
