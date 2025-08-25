@@ -60,7 +60,6 @@ model LoyaltyPass {
 
   // Performance indexes
   @@index([programAddress])          // For getLoyaltyPassesByProgram
-  @@index([recipient])               // For getLoyaltyPassByRecipient
   @@index([recipient, programAddress]) // Composite index for combined queries
 }
 
@@ -84,8 +83,6 @@ model User {
 
   // Performance indexes
   @@index([email])           // For getUserByEmail queries
-  @@index([walletAddress])   // For wallet lookups
-  @@index([referralCode])    // For referral code lookups
   @@map("users")
 }
 
@@ -97,7 +94,6 @@ model VerxioCredit {
   updatedAt   DateTime @updatedAt
 
   // Performance indexes
-  @@index([userAddress])             // For credit balance queries
   @@map("verxio_credits")
 }
 
@@ -124,7 +120,6 @@ model LoyaltyProgramClaimStatus {
   updatedAt      DateTime @updatedAt
 
   // Performance indexes
-  @@index([programAddress])          // For claim status lookups
   @@map("loyalty_program_claim_status")
 }
 

@@ -168,7 +168,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
                   <span className="text-xs font-mono text-white/80">
-                    {user.wallet.address.slice(0, 8)}...{user.wallet.address.slice(-6)}
+                    {user.wallet.address.slice(0, 15)}...{user.wallet.address.slice(-10)}
                   </span>
                 </div>
                 <button

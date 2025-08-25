@@ -63,6 +63,12 @@ export const getUserLoyaltyPrograms = async (userWallet: string) => {
       where: {
         creator: userWallet
       },
+      select: {
+        id: true,
+        creator: true,
+        programPublicKey: true,
+        createdAt: true
+      },
       orderBy: {
         createdAt: 'desc'
       }
@@ -413,7 +419,10 @@ export const getLoyaltyProgramByAddress = async (programAddress: string) => {
 
     // Get the claim status from our database
     const claimStatus = await prisma.loyaltyProgramClaimStatus.findUnique({
-      where: { programAddress }
+      where: { programAddress },
+      select: {
+        claimEnabled: true
+      }
     });
 
     // Get program details from the blockchain
@@ -450,7 +459,10 @@ export const getLoyaltyProgramByAddress = async (programAddress: string) => {
 export const getClaimStatus = async (programAddress: string) => {
   try {
     const claimStatus = await prisma.loyaltyProgramClaimStatus.findUnique({
-      where: { programAddress }
+      where: { programAddress },
+      select: {
+        claimEnabled: true
+      }
     });
 
     return { 
