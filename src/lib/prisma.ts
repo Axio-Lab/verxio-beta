@@ -12,6 +12,8 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient().$extends(
   })
 ).$extends(withOptimize({ apiKey: process.env.OPTIMIZE_API_KEY! }))
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
-export default prisma
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma 
+ globalForPrisma.prisma = prisma 
+
+// export default prisma
