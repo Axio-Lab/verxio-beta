@@ -294,7 +294,7 @@ const Page = () => {
 
       const result = await sendTransaction({
         transaction: transaction,
-        connection: new Connection(connectionConfig.endpoint, 'finalized'),
+        connection: new Connection(connectionConfig.endpoint, 'confirmed'),
         address: wallets[0].address
       });
 
