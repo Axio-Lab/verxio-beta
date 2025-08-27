@@ -169,7 +169,6 @@ export const buildPaymentTransaction = async (
 ): Promise<{ success: boolean; transaction?: string; instructions?: number; connection?: any; error?: string }> => {
   try {
     const { reference, amount, recipient, userWallet } = data;
-    console.log('data', data);
     
     if (!reference || !amount || !recipient || !userWallet) {
       return { success: false, error: 'Missing required fields' }
@@ -213,7 +212,16 @@ export const buildPaymentTransaction = async (
     }
     
     const tokenMint = new PublicKey(USDC_MINT);
-
+    
+    // Temporary debug logging
+    console.log('Production Debug:', {
+      rpcEndpoint,
+      usdcMint: USDC_MINT,
+      treasuryWallet: TREASURY_WALLET,
+      userWallet,
+      recipient
+    });
+    
     const paymentAmount = parseFloat(amount);
     const treasuryFee = paymentAmount * TREASURY_FEE_PERCENTAGE;
 
@@ -293,7 +301,6 @@ export const buildPaymentTransaction = async (
       verifySignatures: false,
     });
     
-    console.log('serializedTransaction', serializedTransaction);
     return {
       success: true,
       transaction: serializedTransaction.toString('base64'),
