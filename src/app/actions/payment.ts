@@ -192,8 +192,7 @@ export const buildPaymentTransaction = async (
       return { success: false, error: 'RPC endpoint not configured' }
     }
     
-    const { rpcEndpoint } = configResult;
-    const { USDC_MINT } = await import('@/lib/utils');
+    const { rpcEndpoint, usdcMint } = configResult;
 
     // Treasury wallet address (you can set this in environment variables)
     const TREASURY_WALLET = process.env.TREASURY_WALLET;
@@ -206,22 +205,12 @@ export const buildPaymentTransaction = async (
 
     const connection = new Connection(rpcEndpoint, 'confirmed');
     
-    if (!USDC_MINT) {
+    if (!usdcMint) {
       console.error('USDC_MINT not configured');
       return { success: false, error: 'USDC mint not configured' }
     }
     
-    const tokenMint = new PublicKey(USDC_MINT);
-    
-    // Temporary debug logging
-    console.log('Production Debug:', {
-      rpcEndpoint,
-      usdcMint: USDC_MINT,
-      treasuryWallet: TREASURY_WALLET,
-      userWallet,
-      recipient
-    });
-    
+    const tokenMint = new PublicKey(usdcMint);
     const paymentAmount = parseFloat(amount);
     const treasuryFee = paymentAmount * TREASURY_FEE_PERCENTAGE;
 
