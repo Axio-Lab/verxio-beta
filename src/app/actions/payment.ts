@@ -185,16 +185,32 @@ export const buildPaymentTransaction = async (
 
     // Get Verxio config
     const { getVerxioConfig } = await import('@/app/actions/loyalty');
-    const { rpcEndpoint } = await getVerxioConfig();
-    const { USDC_MINT } = await import('@/lib/utils');
+    const configResult = await getVerxioConfig();
+    
+    if (!configResult.rpcEndpoint) {
+      console.error('RPC endpoint not configured');
+      return { success: false, error: 'RPC endpoint not configured' }
+    }
+    
+    const { rpcEndpoint, usdcMint } = configResult;
 
     // Treasury wallet address (you can set this in environment variables)
-    const TREASURY_WALLET = process.env.TREASURY_WALLET!;
+    const TREASURY_WALLET = process.env.TREASURY_WALLET;
+    if (!TREASURY_WALLET) {
+      console.error('TREASURY_WALLET environment variable not set');
+      return { success: false, error: 'Treasury wallet not configured' }
+    }
+    
     const TREASURY_FEE_PERCENTAGE = 0.005; // 0.5%
 
     const connection = new Connection(rpcEndpoint, 'confirmed');
-    const tokenMint = new PublicKey(USDC_MINT);
-
+    
+    if (!usdcMint) {
+      console.error('USDC_MINT not configured');
+      return { success: false, error: 'USDC mint not configured' }
+    }
+    
+    const tokenMint = new PublicKey(usdcMint);
     const paymentAmount = parseFloat(amount);
     const treasuryFee = paymentAmount * TREASURY_FEE_PERCENTAGE;
 
