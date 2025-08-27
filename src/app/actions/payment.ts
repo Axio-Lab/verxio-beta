@@ -169,6 +169,7 @@ export const buildPaymentTransaction = async (
 ): Promise<{ success: boolean; transaction?: string; instructions?: number; connection?: any; error?: string }> => {
   try {
     const { reference, amount, recipient, userWallet } = data;
+    console.log('data', data);
     
     if (!reference || !amount || !recipient || !userWallet) {
       return { success: false, error: 'Missing required fields' }
@@ -185,14 +186,32 @@ export const buildPaymentTransaction = async (
 
     // Get Verxio config
     const { getVerxioConfig } = await import('@/app/actions/loyalty');
-    const { rpcEndpoint } = await getVerxioConfig();
+    const configResult = await getVerxioConfig();
+    
+    if (!configResult.rpcEndpoint) {
+      console.error('RPC endpoint not configured');
+      return { success: false, error: 'RPC endpoint not configured' }
+    }
+    
+    const { rpcEndpoint } = configResult;
     const { USDC_MINT } = await import('@/lib/utils');
 
     // Treasury wallet address (you can set this in environment variables)
-    const TREASURY_WALLET = process.env.TREASURY_WALLET!;
+    const TREASURY_WALLET = process.env.TREASURY_WALLET;
+    if (!TREASURY_WALLET) {
+      console.error('TREASURY_WALLET environment variable not set');
+      return { success: false, error: 'Treasury wallet not configured' }
+    }
+    
     const TREASURY_FEE_PERCENTAGE = 0.005; // 0.5%
 
     const connection = new Connection(rpcEndpoint, 'confirmed');
+    
+    if (!USDC_MINT) {
+      console.error('USDC_MINT not configured');
+      return { success: false, error: 'USDC mint not configured' }
+    }
+    
     const tokenMint = new PublicKey(USDC_MINT);
 
     const paymentAmount = parseFloat(amount);
@@ -274,6 +293,7 @@ export const buildPaymentTransaction = async (
       verifySignatures: false,
     });
     
+    console.log('serializedTransaction', serializedTransaction);
     return {
       success: true,
       transaction: serializedTransaction.toString('base64'),
