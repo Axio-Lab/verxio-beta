@@ -5,7 +5,7 @@ import { ComingSoon } from '@/components/ui/coming-soon';
 import { AppLayout } from '@/components/layout/app-layout';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 
-export default function Vault() {
+export default function Earn() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export default function Vault() {
 
   if (isLoading) {
     return (
-      <AppLayout currentPage="vault">
+      <AppLayout currentPage="earn">
         <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)]">
           <VerxioLoaderWhite size="md" />
         </div>
@@ -27,7 +27,7 @@ export default function Vault() {
   }
 
   return (
-    <AppLayout currentPage="vault">
+    <AppLayout currentPage="earn">
        <ComingSoon />
     </AppLayout>
   );

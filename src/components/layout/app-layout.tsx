@@ -9,7 +9,7 @@ import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentPage: 'vault' | 'dashboard' | 'create' | 'inbox' | 'profile';
+  currentPage: 'earn' | 'dashboard' | 'create' | 'inbox' | 'profile';
 }
 
 export function AppLayout({ children, currentPage }: AppLayoutProps) {
@@ -102,13 +102,13 @@ export function AppLayout({ children, currentPage }: AppLayoutProps) {
       <nav className="fixed bottom-0 left-0 right-0 z-20 bg-black/80 backdrop-blur-sm border-t border-white/10">
         <div className="flex justify-around py-2">
           <button 
-            onClick={() => router.push('/vault')}
-            className={`flex flex-col items-center p-2 rounded-lg transition-colors hover:bg-white/10 ${getNavItemClass('vault')}`}
+            onClick={() => router.push('/earn')}
+            className={`flex flex-col items-center p-2 rounded-lg transition-colors hover:bg-white/10 ${getNavItemClass('earn')}`}
           >
-            <svg className={`w-6 h-6 mb-1 ${currentPage === 'vault' ? 'text-[#00adef]' : 'text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            <svg className={`w-6 h-6 mb-1 ${currentPage === 'earn' ? 'text-[#00adef]' : 'text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className={`text-xs ${currentPage === 'vault' ? 'text-[#00adef]' : 'text-white'}`}>Vault</span>
+            <span className={`text-xs ${currentPage === 'earn' ? 'text-[#00adef]' : 'text-white'}`}>Earn</span>
           </button>
           <button 
             onClick={() => router.push('/dashboard')}
