@@ -1,6 +1,6 @@
-# Verxio Checkout
+# Verxio Protocol
 
-A Next.js application for Verxio's loyalty native checkout experience with a mobile-first design.
+Add loyalty rewards to your customer checkout experiences
 
 ## Features
 
