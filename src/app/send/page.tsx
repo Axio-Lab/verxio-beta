@@ -209,7 +209,7 @@ export default function SendPage() {
                     type={sendType === 'verxio' ? 'email' : 'text'}
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value)}
-                    placeholder={sendType === 'verxio' ? 'Enter email address' : 'Enter solanawallet address'}
+                    placeholder={sendType === 'verxio' ? 'Enter email address' : 'Enter solana wallet address'}
                     className="bg-white/5 border border-white/15 text-white placeholder:text-white/40 rounded-lg h-12 px-4 focus:border-blue-500/50 focus:bg-white/8 transition-all duration-200"
                   />
                 </div>
