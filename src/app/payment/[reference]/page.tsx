@@ -9,6 +9,7 @@ import { CloseButton } from "@/components/ui/close-button";
 import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
 import { updatePaymentStatus } from '@/app/actions/payment';
+import { UserVerification } from '@/components/auth/user-verification';
 import "react-toastify/dist/ReactToastify.css";
 
 interface PaymentData {
@@ -476,7 +477,7 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
   }
 
   return (
-    <>
+    <UserVerification>
       <ToastContainer
         position="top-right"
         autoClose={3000}
@@ -593,6 +594,6 @@ export default function PaymentPage({ params }: { params: Promise<{ reference: s
           </div>
         </motion.div>
       </div>
-    </>
+    </UserVerification>
   );
 } 

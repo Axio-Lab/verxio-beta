@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { giveVerxioCredits } from '@/app/actions/verxio-credit';
 import { getVerxioConfig } from '@/app/actions/loyalty';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
+import { UserVerification } from '@/components/auth/user-verification';
 
 export default function IssueCreditPage() {
   const { authenticated, ready, user, login, logout } = usePrivy();
@@ -99,8 +100,9 @@ export default function IssueCreditPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
-      <Tiles rows={50} cols={50} tileSize="md" />
+    <UserVerification>
+      <div className="min-h-screen bg-black relative overflow-hidden">
+        <Tiles rows={50} cols={50} tileSize="md" />
       
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-20 flex items-center justify-between p-4 border-b border-white/10 bg-black/80 backdrop-blur-sm">
@@ -285,6 +287,7 @@ export default function IssueCreditPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </UserVerification>
   );
 }
