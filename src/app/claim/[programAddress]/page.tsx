@@ -18,6 +18,7 @@ import { getVerxioConfig, getCollectionAuthoritySecretKey } from '@/app/actions/
 import { getUserVerxioCreditBalance, awardOrRevokeLoyaltyPoints } from '@/app/actions/verxio-credit';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 
+
 interface ProgramDetails {
   collectionAddress: string;
   creator: string;
@@ -546,11 +547,11 @@ export default function ClaimLoyaltyPassPage() {
         </div>
       )}
 
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        theme="dark"
-      />
-    </div>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          theme="dark"
+        />
+      </div>
   );
 }

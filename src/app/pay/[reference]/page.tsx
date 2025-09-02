@@ -9,6 +9,7 @@ import { useSolanaWallets, useSendTransaction } from "@privy-io/react-auth/solan
 import { useParams } from "next/navigation";
 import { Tiles } from "@/components/layout/backgroundTiles";
 import { VerxioLoaderWhite } from "@/components/ui/verxio-loader-white";
+
 import { Transaction, Connection } from "@solana/web3.js";
 import { awardLoyaltyPointsAfterPurchase, checkUserLoyaltyMembership, fetchLoyaltyProgramDetails } from "./loyalty-actions";
 import { updatePaymentStatus } from "@/app/actions/payment";
@@ -546,36 +547,36 @@ const Page = () => {
 
   return (
     <main className="min-h-screen bg-black relative overflow-hidden">
-      {/* Background Stars */}
-      <Tiles rows={50} cols={50} tileSize="md" />
+        {/* Background Stars */}
+        <Tiles rows={50} cols={50} tileSize="md" />
 
-      {/* Header with Logo */}
-      <div className="relative z-20 bg-black/80 backdrop-blur-sm border-b border-white/10 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center">
-            <Image
-              src="/logo/verxioIconWhite.svg"
-              alt="Verxio Logo"
-              width={40}
-              height={40}
-              className="h-8 w-auto"
-            />
-          </div>
-          {authenticated && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-300">
-                Wallet: {user?.wallet?.address?.slice(0, 6)}...{user?.wallet?.address?.slice(-4)}
-              </span>
-              <button
-                onClick={handleConnectWallet}
-                className="text-xs text-gray-400 hover:text-white transition-colors"
-              >
-                Switch
-              </button>
+        {/* Header with Logo */}
+        <div className="relative z-20 bg-black/80 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center">
+              <Image
+                src="/logo/verxioIconWhite.svg"
+                alt="Verxio Logo"
+                width={40}
+                height={40}
+                className="h-8 w-auto"
+              />
             </div>
-          )}
+            {authenticated && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-300">
+                  Wallet: {user?.wallet?.address?.slice(0, 6)}...{user?.wallet?.address?.slice(-4)}
+                </span>
+                <button
+                  onClick={handleConnectWallet}
+                  className="text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  Switch
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
       <div className="relative z-10 flex justify-center items-center min-h-[calc(100vh-80px)] flex-col px-[20px] pt-8">
         {/* Payment Details Card */}
@@ -887,12 +888,12 @@ const Page = () => {
         </div>
       </div>
 
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        theme="dark"
-      />
-    </main>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          theme="dark"
+        />
+      </main>
   );
 };
 

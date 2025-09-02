@@ -41,7 +41,7 @@ const GlowingStarsBackgroundCard = ({
     >
       {/* Subtle background pattern */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/3 via-transparent to-purple-500/3 opacity-40"></div>
-      
+
       <div className="flex justify-center items-center">
         <Illustration mouseEnter={mouseEnter} />
       </div>
@@ -145,89 +145,86 @@ const Glow = ({ delay }: { delay: number }) => {
   );
 };
 
-const CheckoutOptionCard = ({ 
-  option, 
-  index, 
-  onSelect 
-}: { 
-  option: CheckoutOption; 
-  index: number; 
+const CheckoutOptionCard = ({
+  option,
+  index,
+  onSelect
+}: {
+  option: CheckoutOption;
+  index: number;
   onSelect: (id: string) => void;
 }) => {
-  const isDisabled = option.id === "task" || option.id === "product";
-  
+  const isDisabled = false;
+  // option.id === "task" || option.id === "product";
+
   return (
     <motion.div
       initial={{ opacity: 1, y: 0, scale: 1 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ 
-        duration: 0.2, 
+      transition={{
+        duration: 0.2,
         delay: index * 0.02,
         ease: "easeOut"
       }}
-      whileHover={{ 
-        scale: isDisabled ? 1 : 1.02, 
+      whileHover={{
+        scale: isDisabled ? 1 : 1.02,
         y: isDisabled ? 0 : -3,
         transition: { duration: 0.2 }
       }}
       whileTap={{ scale: isDisabled ? 1 : 0.98 }}
       onClick={() => !isDisabled && onSelect(option.id)}
-      className={`group relative overflow-hidden rounded-xl border p-4 backdrop-blur-sm transition-all duration-300 ${
-        isDisabled 
-          ? 'border-white/20 bg-white/5 cursor-not-allowed opacity-60' 
+      className={`group relative overflow-hidden rounded-xl border p-4 backdrop-blur-sm transition-all duration-300 ${isDisabled
+          ? 'border-white/20 bg-white/5 cursor-not-allowed opacity-60'
           : 'border-white/15 bg-white/8 cursor-pointer hover:border-white/25 hover:bg-white/10 hover:shadow-lg'
-      }`}
+        }`}
     >
       <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${option.gradient}`} />
-      
-              <div className="relative z-10 flex items-center space-x-3">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${option.color} text-white transition-all duration-300 ${!isDisabled ? 'group-hover:scale-110 group-hover:shadow-lg' : ''} shadow-md`}>
-            {option.icon}
+
+      <div className="relative z-10 flex items-center space-x-3">
+        <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${option.color} text-white transition-all duration-300 ${!isDisabled ? 'group-hover:scale-110 group-hover:shadow-lg' : ''} shadow-md`}>
+          {option.icon}
+        </div>
+
+        {/* Coming Soon Badge for disabled options */}
+        {isDisabled && (
+          <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg z-20">
+            Coming Soon
           </div>
-          
-          {/* Coming Soon Badge for disabled options */}
-          {isDisabled && (
-            <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg z-20">
-              Coming Soon
-            </div>
-          )}
-        
-                  <div className="flex-1 space-y-1">
-            <h3 className={`font-semibold text-base transition-colors duration-300 ${
-              isDisabled ? 'text-white/60' : 'text-white group-hover:text-white/90'
+        )}
+
+        <div className="flex-1 space-y-1">
+          <h3 className={`font-semibold text-base transition-colors duration-300 ${isDisabled ? 'text-white/60' : 'text-white group-hover:text-white/90'
             }`}>
-              {option.title}
-            </h3>
-            <p className={`text-sm transition-colors duration-300 leading-relaxed ${
-              isDisabled ? 'text-white/40' : 'text-white/60 group-hover:text-white/70'
+            {option.title}
+          </h3>
+          <p className={`text-sm transition-colors duration-300 leading-relaxed ${isDisabled ? 'text-white/40' : 'text-white/60 group-hover:text-white/70'
             }`}>
-              {option.description}
-            </p>
-          </div>
-        
-                  <motion.div
-            initial={{ x: -10, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.2 + index * 0.1 }}
-            className={`text-xl transition-all duration-300 ${
-              isDisabled ? 'text-white/30' : 'text-white/50 group-hover:text-white/80 group-hover:translate-x-1'
+            {option.description}
+          </p>
+        </div>
+
+        <motion.div
+          initial={{ x: -10, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ delay: 0.2 + index * 0.1 }}
+          className={`text-xl transition-all duration-300 ${isDisabled ? 'text-white/30' : 'text-white/50 group-hover:text-white/80 group-hover:translate-x-1'
             }`}
-          >
-            {isDisabled ? '⏸' : '→'}
-          </motion.div>
+        >
+          {isDisabled ? '⏸' : '→'}
+        </motion.div>
       </div>
     </motion.div>
   );
 };
 
-export const CreateCheckoutCard = ({ 
-  isOpen = true, 
-  onClose = () => {}, 
-  onSelect = () => {} 
+export const CreateCheckoutCard = ({
+  isOpen = true,
+  onClose = () => { },
+  onSelect = () => { }
 }: CreateCheckoutCardProps) => {
   const router = useRouter();
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  
+
   const checkoutOptions: CheckoutOption[] = [
     {
       id: "payment",
@@ -239,7 +236,7 @@ export const CreateCheckoutCard = ({
     },
     {
       id: "task",
-      title: "Task Checkout", 
+      title: "Task Checkout",
       description: "Manage tasks and workflow completion",
       icon: <CheckSquare size={20} />,
       color: "bg-green-600",
@@ -250,7 +247,7 @@ export const CreateCheckoutCard = ({
       title: "Product Checkout",
       description: "Sell products/services and manage inventory",
       icon: <Package size={20} />,
-      color: "bg-purple-600", 
+      color: "bg-purple-600",
       gradient: "bg-gradient-to-br from-purple-600 to-purple-800"
     },
     {
@@ -266,13 +263,16 @@ export const CreateCheckoutCard = ({
   const handleSelect = (optionId: string) => {
     setSelectedOption(optionId);
     onSelect(optionId);
-    
+
     if (optionId === "payment") {
       router.push('/create/payment');
     } else if (optionId === "loyalty") {
       router.push('/create/loyalty');
+    } else if (optionId === "task") {
+      router.push('/create/task');
+    } else if (optionId === "product") {
+      router.push('/create/product');
     }
-    // Task and Product are disabled - do nothing when clicked
   };
 
   const handleClose = () => {
@@ -288,7 +288,7 @@ export const CreateCheckoutCard = ({
       initial={{ opacity: 1, scale: 1, y: 0 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-      transition={{ 
+      transition={{
         duration: 0.2,
         ease: "easeOut"
       }}
@@ -302,7 +302,7 @@ export const CreateCheckoutCard = ({
           >
             <X size={18} />
           </button>
-          
+
           <motion.div
             initial={{ opacity: 1, y: 0 }}
             animate={{ opacity: 1, y: 0 }}

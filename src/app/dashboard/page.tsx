@@ -77,6 +77,12 @@ export default function Dashboard() {
     router.push('/send');
   };
 
+  const handleFund = () => {
+    router.push('/fund');
+  };
+
+
+
   const handleCopyAddress = async () => {
     if (user?.wallet?.address) {
       try {
@@ -185,27 +191,27 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Send & Withdraw Actions */}
-            <div className="flex items-center gap-3 mb-4">
+            {/* Action Buttons */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <button
+                onClick={handleFund}
+                className="flex items-center justify-center bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-3 px-2 rounded-lg font-medium transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-green-500/25"
+              >
+                <span className="text-sm">Fund</span>
+              </button>
               <button
                 onClick={handleSendTokens}
-                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2.5 px-3 rounded-lg font-medium transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-blue-500/25"
+                className="flex items-center justify-center bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3 px-2 rounded-lg font-medium transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-blue-500/25"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-                Send
+                <span className="text-sm">Send</span>
               </button>
               <button
                 disabled
-                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white/60 py-2.5 px-3 rounded-lg font-medium cursor-not-allowed relative shadow-lg"
+                className="flex items-center justify-center bg-gradient-to-r from-gray-600 to-gray-700 text-white/60 py-3 px-2 rounded-lg font-medium cursor-not-allowed relative shadow-lg"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
-                </svg>
-                Withdraw
-                <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold shadow-lg">
-                  Coming Soon
+                <span className="text-sm">Withdraw</span>
+                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs px-1 py-0.5 rounded-full font-bold shadow-lg text-[9px]">
+                  Soon
                 </span>
               </button>
             </div>

@@ -32,12 +32,14 @@
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.536.0",
     "next": "15.4.5",
+    "paj_ramp": "^1.2.3",
     "pinata": "^2.4.9",
     "prisma-field-encryption": "^1.6.0",
     "qrcode.react": "^4.2.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-toastify": "^11.0.5",
+    "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
