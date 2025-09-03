@@ -7,7 +7,6 @@ import { Tiles } from '@/components/layout/backgroundTiles';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
-import { UserVerification } from '@/components/auth/user-verification';
 
 interface PaymentData {
   amount: string;
@@ -217,21 +216,19 @@ function PaymentContent() {
 
 export default function PayPage() {
   return (
-    <UserVerification>
-      <Suspense fallback={
-        <div className="min-h-screen bg-black relative overflow-hidden">
-          <Tiles rows={50} cols={50} tileSize="md" />
-          <div className="relative z-10 flex items-center justify-center min-h-screen">
-            <div className="text-center">
-              <VerxioLoaderWhite size="lg" />
-              <p className="text-white mt-4 text-lg">Loading Payment...</p>
-              <p className="text-zinc-400 text-sm mt-2">Please wait while we prepare your payment</p>
-            </div>
+    <Suspense fallback={
+      <div className="min-h-screen bg-black relative overflow-hidden">
+        <Tiles rows={50} cols={50} tileSize="md" />
+        <div className="relative z-10 flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <VerxioLoaderWhite size="lg" />
+            <p className="text-white mt-4 text-lg">Loading Payment...</p>
+            <p className="text-zinc-400 text-sm mt-2">Please wait while we prepare your payment</p>
           </div>
         </div>
-      }>
-        <PaymentContent />
-      </Suspense>
-    </UserVerification>
+      </div>
+    }>
+      <PaymentContent />
+    </Suspense>
   );
 } 

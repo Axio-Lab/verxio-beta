@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react';
 import { Tiles } from '@/components/layout/backgroundTiles';
 import Image from 'next/image';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
-import { UserVerification } from '@/components/auth/user-verification';
+
+
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -61,8 +62,7 @@ export function AppLayout({ children, currentPage }: AppLayoutProps) {
   };
 
   return (
-    <UserVerification>
-      <div className="min-h-screen bg-black relative overflow-hidden">
+    <div className="min-h-screen bg-black relative overflow-hidden">
         {/* Background Stars */}
         <Tiles 
           rows={50} 
@@ -151,6 +151,5 @@ export function AppLayout({ children, currentPage }: AppLayoutProps) {
           </div>
         </nav>
       </div>
-    </UserVerification>
   );
 }

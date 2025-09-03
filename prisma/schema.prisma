@@ -21,11 +21,10 @@ model PaymentRecord {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  // Performance indexes
-  @@index([recipient])               // For recipient queries
-  @@index([status])                  // For status filtering
-  @@index([createdAt])               // For date sorting
-  @@index([loyaltyProgramAddress])   // For loyalty queries
+  @@index([recipient])
+  @@index([status])
+  @@index([createdAt])
+  @@index([loyaltyProgramAddress])
   @@map("payment_records")
 }
 
@@ -42,9 +41,8 @@ model LoyaltyProgram {
   /// @encrypted
   authoritySecretKey String
 
-  // Performance indexes
-  @@index([creator])                 // For getUserLoyaltyPrograms
-  @@index([programPublicKey])        // For program lookups
+  @@index([creator])
+  @@index([programPublicKey])
 }
 
 model LoyaltyPass {
@@ -58,31 +56,27 @@ model LoyaltyPass {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  // Performance indexes
-  @@index([programAddress])          // For getLoyaltyPassesByProgram
-  @@index([recipient, programAddress]) // Composite index for combined queries
+  @@index([programAddress])
+  @@index([recipient, programAddress])
 }
 
 model User {
-  id            String   @id @default(cuid())
-  walletAddress String   @unique
-  email         String?
-  name          String?
-  bio           String?
-  avatar        String?
-  referralCode  String?  @unique
-  referralCount Int      @default(0)
-  pendingReferralCount Int @default(0)
-  signupBonusClaimed Boolean @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                   String     @id @default(cuid())
+  walletAddress        String     @unique
+  email                String?
+  name                 String?
+  bio                  String?
+  avatar               String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  pendingReferralCount Int        @default(0)
+  referralCode         String?    @unique
+  referralCount        Int        @default(0)
+  signupBonusClaimed   Boolean    @default(false)
+  referralsReceived    Referral[] @relation("ReferredUser")
+  referralsGiven       Referral[] @relation("Referrer")
 
-  // Referral relationships
-  referralsGiven    Referral[] @relation("Referrer")
-  referralsReceived Referral[] @relation("ReferredUser")
-
-  // Performance indexes
-  @@index([email])           // For getUserByEmail queries
+  @@index([email])
   @@map("users")
 }
 
@@ -93,7 +87,6 @@ model VerxioCredit {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Performance indexes
   @@map("verxio_credits")
 }
 
@@ -106,9 +99,8 @@ model VerxioCreditHistory {
   assetOwner   String
   createdAt    DateTime @default(now())
 
-  // Performance indexes
-  @@index([creator])                 // For user credit history
-  @@index([createdAt])               // For date-based queries
+  @@index([creator])
+  @@index([createdAt])
   @@map("verxio_credit_history")
 }
 
@@ -119,30 +111,130 @@ model LoyaltyProgramClaimStatus {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  // Performance indexes
   @@map("loyalty_program_claim_status")
 }
 
 model Referral {
-  id              String        @id @default(cuid())
-  referrerId      String
-  referredUserId  String
-  status          ReferralStatus @default(PENDING)
-  referrerCreditsAwarded Boolean @default(false)
-  referredUserCreditsAwarded Boolean @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                         String         @id @default(cuid())
+  referrerId                 String
+  referredUserId             String
+  status                     ReferralStatus @default(PENDING)
+  referrerCreditsAwarded     Boolean        @default(false)
+  referredUserCreditsAwarded Boolean        @default(false)
+  createdAt                  DateTime       @default(now())
+  updatedAt                  DateTime       @updatedAt
+  referredUser               User           @relation("ReferredUser", fields: [referredUserId], references: [id])
+  referrer                   User           @relation("Referrer", fields: [referrerId], references: [id])
 
-  // Relations
-  referrer        User          @relation("Referrer", fields: [referrerId], references: [id])
-  referredUser    User          @relation("ReferredUser", fields: [referredUserId], references: [id])
-
-  // Performance indexes
-  @@index([referrerId])        // For referralsGiven queries
-  @@index([referredUserId])    // For referralsReceived queries
-  @@index([status])            // For status filtering
-  @@index([createdAt])         // For date sorting
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([status])
+  @@index([createdAt])
   @@map("referrals")
+}
+
+model TransferRecord {
+  id                     String         @id @default(cuid())
+  senderWalletAddress    String
+  recipientWalletAddress String
+  amount                 Float
+  sendType               SendType
+  status                 TransferStatus @default(PENDING)
+  transactionHash        String?
+  error                  String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@index([senderWalletAddress])
+  @@index([recipientWalletAddress])
+  @@index([status])
+  @@index([createdAt])
+  @@map("transfer_records")
+}
+
+model PajRampSession {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  isActive  String?
+  expiresAt String?
+  /// @encrypted
+  token     String?
+  uuid      String?
+  device    String?
+  os        String?
+  browser   String?
+  ip        String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([isActive])
+  @@map("paj_ramp_sessions")
+}
+
+model Task {
+  id                     String              @id @default(cuid())
+  creatorAddress         String
+  taskName               String
+  taskDescription        String
+  submissionInstructions String
+  image                  String?
+  prizePool              Float
+  numberOfWinners        Int
+  maxParticipants        Int
+  pointsPerAction        Int
+  prizeSplits            String[]
+  expiryDate             DateTime
+  status                 TaskStatus          @default(ACTIVE)
+  totalParticipants      Int                 @default(0)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  participations         TaskParticipation[]
+  winners                TaskWinner[]
+
+  @@index([creatorAddress])
+  @@index([status])
+  @@index([expiryDate])
+  @@index([createdAt])
+  @@map("tasks")
+}
+
+model TaskParticipation {
+  id                 String              @id @default(cuid())
+  taskId             String
+  participantAddress String
+  submissionData     String?
+  submissionUrl      String?
+  status             ParticipationStatus @default(SUBMITTED)
+  submittedAt        DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  task               Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, participantAddress])
+  @@index([taskId])
+  @@index([participantAddress])
+  @@index([status])
+  @@index([submittedAt])
+  @@map("task_participations")
+}
+
+model TaskWinner {
+  id            String       @id @default(cuid())
+  taskId        String
+  winnerAddress String
+  position      Int
+  prizeAmount   Float
+  selectedAt    DateTime     @default(now())
+  claimedAt     DateTime?
+  status        WinnerStatus @default(DISTRIBUTED)
+  task          Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, position])
+  @@index([taskId])
+  @@index([winnerAddress])
+  @@index([position])
+  @@index([status])
+  @@map("task_winners")
 }
 
 enum PaymentStatus {
@@ -150,26 +242,6 @@ enum PaymentStatus {
   SUCCESS
   FAILED
   CANCELLED
-}
-
-model TransferRecord {
-  id                    String        @id @default(cuid())
-  senderWalletAddress   String
-  recipientWalletAddress String
-  amount                Float
-  sendType              SendType
-  status                TransferStatus @default(PENDING)
-  transactionHash       String?
-  error                 String?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-
-  // Performance indexes
-  @@index([senderWalletAddress])     // For sender queries
-  @@index([recipientWalletAddress])  // For recipient queries
-  @@index([status])                  // For status filtering
-  @@index([createdAt])               // For date sorting
-  @@map("transfer_records")
 }
 
 enum ReferralStatus {
@@ -186,101 +258,6 @@ enum TransferStatus {
   PENDING
   SUCCESS
   FAILED
-}
-
-model PajRampSession {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  isActive    String?
-  expiresAt   String?
-  /// @encrypted
-  token       String?
-  uuid        String?
-  device      String?
-  os          String?
-  browser     String?
-  ip          String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Performance indexes
-  @@index([email])                  // For email lookups
-  @@index([isActive])               // For active session queries
-  @@map("paj_ramp_sessions")
-}
-
-model Task {
-  id                    String   @id @default(cuid())
-  creatorAddress        String
-  taskName              String
-  taskDescription       String
-  submissionInstructions String
-  image                 String?  // Base64 encoded image
-  prizePool             Float
-  numberOfWinners       Int
-  maxParticipants       Int
-  pointsPerAction       Int
-  prizeSplits           String[] // JSON array of prize splits
-  expiryDate            DateTime
-  status                TaskStatus @default(ACTIVE)
-  totalParticipants     Int @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  // Relations
-  participations        TaskParticipation[]
-  winners               TaskWinner[]
-
-  // Performance indexes
-  @@index([creatorAddress])        // For creator queries
-  @@index([status])                // For status filtering
-  @@index([expiryDate])            // For expiry date queries
-  @@index([createdAt])             // For date sorting
-  @@map("tasks")
-}
-
-model TaskParticipation {
-  id              String   @id @default(cuid())
-  taskId          String
-  participantAddress String
-  submissionData  String?  // JSON string containing submission details
-  submissionUrl   String?  // URL to submission (if applicable)
-  status          ParticipationStatus @default(SUBMITTED)
-  submittedAt     DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  // Relations
-  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  // Performance indexes
-  @@index([taskId])                    // For task queries
-  @@index([participantAddress])        // For participant queries
-  @@index([status])                    // For status filtering
-  @@index([submittedAt])               // For date sorting
-  @@unique([taskId, participantAddress]) // Prevent duplicate submissions
-  @@map("task_participations")
-}
-
-model TaskWinner {
-  id              String   @id @default(cuid())
-  taskId          String
-  winnerAddress   String
-  position        Int      // 1st, 2nd, 3rd place, etc.
-  prizeAmount     Float    // Amount won
-  selectedAt      DateTime @default(now())
-  claimedAt       DateTime?
-  status          WinnerStatus @default(DISTRIBUTED)
-
-  // Relations
-  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  // Performance indexes
-  @@index([taskId])                    // For task queries
-  @@index([winnerAddress])             // For winner queries
-  @@index([position])                  // For position queries
-  @@index([status])                    // For status filtering
-  @@unique([taskId, position])         // Prevent duplicate positions
-  @@map("task_winners")
 }
 
 enum TaskStatus {
