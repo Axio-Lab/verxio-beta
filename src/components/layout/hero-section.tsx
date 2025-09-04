@@ -36,11 +36,11 @@ export const AuroraHero = () => {
     const userData = { walletAddress, email, name };
     await upsertUserViaApi(userData);
 
-    // Process referral using existing server actions with new-user age check and toasts
+    // Process referral via API to avoid server action response issues in onComplete
     try {
       const referralCode = getStoredReferralCode();
       if (referralCode) {
-        // Check if this is a new user (<= 5 minutes old)
+        // Check new-user age first (kept locally to preserve behavior and toasts)
         const existingUser = await getUserByWallet(walletAddress);
         if (existingUser.success && existingUser.user && existingUser.user.createdAt) {
           const userAge = Date.now() - new Date(existingUser.user.createdAt).getTime();
@@ -53,26 +53,26 @@ export const AuroraHero = () => {
           }
         }
 
-        const referrerResult = await getUserByReferralCode(referralCode);
-        if (referrerResult.success && referrerResult.user) {
-          const referralResult = await createReferral({
-            referrerWalletAddress: referrerResult.user.walletAddress,
-            referredUserWalletAddress: walletAddress
-          });
+        const res = await fetch('/api/referral/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ referredWalletAddress: walletAddress, referralCode })
+        })
+        const data = await res.json()
 
-          if (referralResult.success) {
-            toast.success('You can earn 500 Verxio credits when you deposit at least 5 USDC.');
-            clearReferralCode();
-          } else {
-            if (referralResult.error?.includes('already has a referral relationship')) {
-              toast.error('You already have a referral relationship. No bonus available.');
-            } else {
-              console.error('Failed to create referral:', referralResult.error);
-            }
-            clearReferralCode();
-          }
+        if (data.success) {
+          toast.success('You can earn 500 Verxio credits when you deposit at least 5 USDC.');
+          clearReferralCode();
         } else {
-          console.error('Invalid referral code');
+          if (data.error?.includes('already has a successful referral') || data.error?.includes('already has a referral relationship')) {
+            toast.error('You already have a referral relationship. No bonus available.');
+          } else if (data.error?.includes('Invalid referral code')) {
+            console.error('Invalid referral code');
+          } else if (data.error?.includes('Sign up bonus only available for new users')) {
+            toast.info('Sign up bonus only available for new users.');
+          } else {
+            console.error('Failed to create referral:', data.error);
+          }
           clearReferralCode();
         }
       }

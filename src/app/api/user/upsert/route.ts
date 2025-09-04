@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getOrCreateUserReferralCode } from '@/app/actions/referral'
 
 export async function POST(request: Request) {
   try {
@@ -27,10 +28,32 @@ export async function POST(request: Request) {
         walletAddress: true,
         email: true,
         name: true,
+        referralCode: true,
         createdAt: true,
         updatedAt: true,
       },
     })
+
+    // Ensure referral code exists immediately after upsert
+    try {
+      const codeResult = await getOrCreateUserReferralCode(walletAddress)
+      if (codeResult?.success && codeResult.referralCode && !user.referralCode) {
+        // refresh user snapshot with referralCode for response consistency
+        const refreshed = await prisma.user.findUnique({
+          where: { walletAddress },
+          select: {
+            id: true,
+            walletAddress: true,
+            email: true,
+            name: true,
+            referralCode: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        })
+        return NextResponse.json({ success: true, user: refreshed })
+      }
+    } catch {}
 
     return NextResponse.json({ success: true, user })
   } catch (error) {
