@@ -338,6 +338,118 @@ export const submitTaskParticipation = async (data: SubmitTaskData): Promise<Sub
   }
 };
 
+// Approve or reject a task submission (creator moderation)
+export interface ModerateSubmissionData {
+  taskId: string;
+  participationId: string;
+  creatorAddress: string;
+  approve: boolean;
+}
+
+export interface ModerateSubmissionResult {
+  success: boolean;
+  status?: string;
+  error?: string;
+}
+
+export const moderateTaskSubmission = async (
+  data: ModerateSubmissionData
+): Promise<ModerateSubmissionResult> => {
+  try {
+    const { taskId, participationId, creatorAddress, approve } = data;
+
+    // Verify task and ownership
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, creatorAddress }
+    });
+
+    if (!task) {
+      return {
+        success: false,
+        error: 'Task not found or you are not the creator'
+      };
+    }
+
+    // Verify participation belongs to task
+    const participation = await prisma.taskParticipation.findUnique({
+      where: { id: participationId }
+    });
+
+    if (!participation || participation.taskId !== taskId) {
+      return {
+        success: false,
+        error: 'Submission not found for this task'
+      };
+    }
+
+    // If already moderated, return current status
+    if (participation.status === 'APPROVED' || participation.status === 'REJECTED') {
+      return {
+        success: true,
+        status: participation.status
+      };
+    }
+
+    if (approve) {
+      // Mark as accepted
+      await prisma.taskParticipation.update({
+        where: { id: participationId },
+        data: { status: 'ACCEPTED' }
+      });
+
+      // Award loyalty credits to participant equal to pointsPerAction
+      try {
+        await awardOrRevokeLoyaltyPoints({
+          creatorAddress: creatorAddress,
+          points: task.pointsPerAction,
+          assetAddress: taskId,
+          assetOwner: participation.participantAddress,
+          action: 'AWARD'
+        });
+      } catch (creditError) {
+        console.error('Error awarding credits for approval:', creditError);
+        // We do not fail moderation if awarding fails
+      }
+
+      return {
+        success: true,
+        status: 'ACCEPTED'
+      };
+    } else {
+      // Mark as rejected
+      await prisma.taskParticipation.update({
+        where: { id: participationId },
+        data: { status: 'REJECTED' }
+      });
+
+      // Refund credits to creator for rejected submission
+      try {
+        await awardOrRevokeLoyaltyPoints({
+          creatorAddress: creatorAddress,
+          points: task.pointsPerAction,
+          assetAddress: taskId,
+          assetOwner: creatorAddress,
+          action: 'AWARD' // AWARD = give credits back to creator
+        });
+      } catch (creditError) {
+        console.error('Error refunding credits for rejection:', creditError);
+        // We do not fail moderation if refunding fails
+      }
+
+      return {
+        success: true,
+        status: 'REJECTED'
+      };
+    }
+  } catch (error: any) {
+    console.error('Error moderating task submission:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to moderate submission'
+    };
+  }
+};
+
 // Get user's task participations
 export const getUserTaskParticipations = async (participantAddress: string) => {
   try {
@@ -353,6 +465,7 @@ export const getUserTaskParticipations = async (participantAddress: string) => {
             taskDescription: true,
             prizePool: true,
             numberOfWinners: true,
+            pointsPerAction: true,
             status: true,
             expiryDate: true,
             createdAt: true
@@ -378,7 +491,7 @@ export const getUserTaskParticipations = async (participantAddress: string) => {
 };
 
 // Get task participations for creator
-export const getTaskParticipations = async (taskId: string, creatorAddress: string) => {
+export const getTaskParticipations = async (taskId: string, creatorAddress: string, page: number = 1, limit: number = 10) => {
   try {
     // Verify creator owns the task
     const task = await prisma.task.findFirst({
@@ -395,18 +508,55 @@ export const getTaskParticipations = async (taskId: string, creatorAddress: stri
       };
     }
 
-    const participations = await prisma.taskParticipation.findMany({
-      where: {
-        taskId
-      },
-      orderBy: {
-        submittedAt: 'desc'
-      }
-    });
+    const skip = (page - 1) * limit;
+
+    const [participations, totalCount] = await Promise.all([
+      prisma.taskParticipation.findMany({
+        where: {
+          taskId
+        },
+        orderBy: {
+          submittedAt: 'desc'
+        },
+        skip,
+        take: limit
+      }),
+      prisma.taskParticipation.count({
+        where: {
+          taskId
+        }
+      })
+    ]);
+
+    // Fetch user data for each participant
+    const participationsWithUsers = await Promise.all(
+      participations.map(async (participation: any) => {
+        const user = await prisma.user.findUnique({
+          where: {
+            walletAddress: participation.participantAddress
+          },
+          select: {
+            email: true,
+            name: true
+          }
+        });
+        
+        return {
+          ...participation,
+          participant: user
+        };
+      })
+    );
 
     return {
       success: true,
-      participations
+      participations: participationsWithUsers,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      }
     };
   } catch (error: any) {
     console.error('Error fetching task participations:', error);

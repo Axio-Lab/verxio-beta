@@ -65,6 +65,27 @@ export const TaskCheckoutCard = ({
     }
   }, [countdown, showSuccess, router]);
 
+  // Start a countdown once success is shown, then let the existing
+  // redirect effect navigate when countdown reaches 0
+  useEffect(() => {
+    if (!showSuccess) return;
+
+    // reset to 5 seconds whenever success is displayed
+    setCountdown(5);
+
+    const intervalId = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(intervalId);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [showSuccess]);
+
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -129,7 +150,7 @@ export const TaskCheckoutCard = ({
         expiryDate
       };
 
-      console.log('Creating task:', taskData);
+      // console.log('Creating task:', taskData);
 
       const result = await createTask(taskData);
 

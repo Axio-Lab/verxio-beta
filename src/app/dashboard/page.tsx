@@ -73,6 +73,14 @@ export default function Dashboard() {
     router.push('/manage');
   };
 
+  const handleTaskManage = () => {
+    router.push('/manage/task');
+  };
+
+  const handleProductManagement = () => {
+    router.push('/manage/product');
+  };
+
   const handleSendTokens = () => {
     router.push('/send');
   };
@@ -310,6 +318,26 @@ export default function Dashboard() {
                   </div>
                   <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Loyalty Program</div>
                   <div className="text-xs text-white/60 font-medium">Manage loyalty program</div>
+                </button>
+                <button 
+                  onClick={handleTaskManage}
+                  className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 text-left transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
+                >
+                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200 shadow-lg">
+                    <Users className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Manage Tasks</div>
+                  <div className="text-xs text-white/60 font-medium">Review submissions</div>
+                </button>
+                <button 
+                  onClick={handleProductManagement}
+                  className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 text-left transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
+                >
+                  <div className="w-8 h-8 bg-gradient-to-br from-fuchsia-600 to-fuchsia-800 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200 shadow-lg">
+                    <Users className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Product Management</div>
+                  <div className="text-xs text-white/60 font-medium">Manage products</div>
                 </button>
               </div>
             </div>
