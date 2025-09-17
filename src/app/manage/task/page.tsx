@@ -7,7 +7,7 @@ import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
 import { getUserTasks, getUserTaskParticipations } from '@/app/actions/task';
 import { useRouter } from 'next/navigation';
-import { Plus, ListChecks, ExternalLink } from 'lucide-react';
+import { Plus, ListChecks, ExternalLink, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 export default function ManageTasksPage() {
   const { user } = usePrivy();
@@ -114,7 +114,16 @@ export default function ManageTasksPage() {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <div className="text-sm font-medium text-white">{p.task.taskName}</div>
-                          <div className={`text-xs font-medium ${p.status === 'APPROVED' ? 'text-green-400' : p.status === 'REJECTED' ? 'text-red-400' : 'text-blue-400'}`}>{p.status}</div>
+                          <div className={`flex items-center gap-1 text-xs font-medium ${
+                            p.status === 'ACCEPTED' ? 'text-green-400' : 
+                            p.status === 'REJECTED' ? 'text-red-400' : 
+                            'text-blue-400'
+                          }`}>
+                            {p.status === 'ACCEPTED' && <CheckCircle className="w-3 h-3" />}
+                            {p.status === 'REJECTED' && <XCircle className="w-3 h-3" />}
+                            {p.status === 'SUBMITTED' && <Clock className="w-3 h-3" />}
+                            {p.status}
+                          </div>
                         </div>
                         {/* Submission details */}
                         {p.submissionUrl && (
@@ -127,6 +136,23 @@ export default function ManageTasksPage() {
                         {p.submissionData && (
                           <div className="mt-1 text-xs text-white/80 break-words">
                             {p.submissionData}
+                          </div>
+                        )}
+                        {/* Credit notification */}
+                        {p.status === 'ACCEPTED' && (
+                          <div className="mt-2 p-2 bg-green-500/20 border border-green-500/30 rounded-lg">
+                            <div className="flex items-center gap-2 text-xs text-green-300">
+                              <CheckCircle className="w-3 h-3" />
+                              <span className="font-medium">Credited with +{p.task.pointsPerAction} $VERXIO credits</span>
+                            </div>
+                          </div>
+                        )}
+                        {p.status === 'REJECTED' && (
+                          <div className="mt-2 p-2 bg-red-500/20 border border-red-500/30 rounded-lg">
+                            <div className="flex items-center gap-2 text-xs text-red-300">
+                              <XCircle className="w-3 h-3" />
+                              <span className="font-medium">Submission rejected - no credits awarded</span>
+                            </div>
                           </div>
                         )}
                         <div className="flex items-center justify-between mt-2">

@@ -465,6 +465,7 @@ export const getUserTaskParticipations = async (participantAddress: string) => {
             taskDescription: true,
             prizePool: true,
             numberOfWinners: true,
+            pointsPerAction: true,
             status: true,
             expiryDate: true,
             createdAt: true
