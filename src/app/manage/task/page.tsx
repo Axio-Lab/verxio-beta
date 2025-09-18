@@ -7,7 +7,8 @@ import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
 import { getUserTasks, getUserTaskParticipations } from '@/app/actions/task';
 import { useRouter } from 'next/navigation';
-import { Plus, ListChecks, ExternalLink, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Plus, ListChecks, ExternalLink, CheckCircle, XCircle, Clock, ArrowLeft } from 'lucide-react';
+import { AppButton } from '@/components/ui/app-button';
 
 export default function ManageTasksPage() {
   const { user } = usePrivy();
@@ -55,9 +56,18 @@ export default function ManageTasksPage() {
   return (
     <AppLayout currentPage="dashboard">
       <div className="max-w-md mx-auto space-y-6">
-        <div className="text-center mb-2">
-          <h1 className="text-2xl font-bold text-white">Task Management</h1>
-          <p className="text-white/60 text-sm">Create and manage your tasks</p>
+        <div className="flex items-center gap-4 mb-2">
+          <AppButton
+            onClick={() => router.push('/dashboard')}
+            variant="secondary"
+            className="p-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </AppButton>
+          <div className="text-center flex-1">
+            <h1 className="text-2xl font-bold text-white">Task Management</h1>
+            <p className="text-white/60 text-sm">Create and manage your tasks</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

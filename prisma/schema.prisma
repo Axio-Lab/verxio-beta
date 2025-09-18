@@ -237,6 +237,52 @@ model TaskWinner {
   @@map("task_winners")
 }
 
+model Product {
+  id                   String   @id @default(cuid())
+  creatorAddress       String
+  productName          String
+  amount               Float
+  pointsPerPurchase    Int
+  isProduct            Boolean  @default(true)
+  quantity             Int
+  maxQuantity          Int      @default(50)
+  redirectUrl          String
+  image                String?
+  enableReferral       Boolean  @default(false)
+  referralPercentage   Int      @default(50)
+  status               ProductStatus @default(ACTIVE)
+  totalSold            Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  purchases            ProductPurchase[]
+
+  @@index([creatorAddress])
+  @@index([status])
+  @@index([createdAt])
+  @@map("products")
+}
+
+model ProductPurchase {
+  id              String        @id @default(cuid())
+  productId       String
+  buyerAddress    String
+  quantity        Int
+  totalAmount     Float
+  pointsAwarded   Int
+  referralCode    String?
+  referralAddress String?
+  referralPoints  Int?
+  status          PurchaseStatus @default(COMPLETED)
+  purchasedAt     DateTime      @default(now())
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([buyerAddress])
+  @@index([purchasedAt])
+  @@index([status])
+  @@map("product_purchases")
+}
+
 enum PaymentStatus {
   PENDING
   SUCCESS
@@ -276,4 +322,17 @@ enum ParticipationStatus {
 
 enum WinnerStatus {
   DISTRIBUTED
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  SOLD_OUT
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }

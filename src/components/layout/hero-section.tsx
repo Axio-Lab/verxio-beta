@@ -7,7 +7,6 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useRouter } from 'next/navigation';
 
 import { motion } from "framer-motion";
-import { getUserByReferralCode, createReferral } from '@/app/actions/referral';
 import { getUserByWallet } from '@/app/actions/user';
 import { useReferral } from '@/hooks/useReferral';
 import { toast } from 'react-toastify';
