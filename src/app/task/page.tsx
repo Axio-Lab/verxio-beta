@@ -52,14 +52,25 @@ export default function TaskBrowsePage() {
                   <button
                     key={task.id}
                     onClick={() => router.push(`/task/${task.id}`)}
-                    className="w-full p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-sm text-left"
+                    className="w-full bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-sm text-left overflow-hidden"
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-sm font-medium text-white">{task.taskName}</div>
-                      <div className="text-xs text-blue-400 font-medium">${task.prizePool}</div>
-                    </div>
-                    <div className="text-xs text-white/60">
-                      {task.totalParticipants} / {task.maxParticipants} participants • Ends {new Date(task.expiryDate).toLocaleString()}
+                    {task.image && (
+                      <div className="w-full h-32 overflow-hidden">
+                        <img
+                          src={task.image}
+                          alt={task.taskName}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-sm font-medium text-white">{task.taskName}</div>
+                        <div className="text-xs text-blue-400 font-medium">${task.prizePool}</div>
+                      </div>
+                      <div className="text-xs text-white/60">
+                        {task.totalParticipants} / {task.maxParticipants} participants • Ends {new Date(task.expiryDate).toLocaleString()}
+                      </div>
                     </div>
                   </button>
                 ))}

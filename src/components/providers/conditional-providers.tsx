@@ -10,7 +10,8 @@ export function ConditionalProviders({ children }: { children: React.ReactNode }
     // Use wallet providers for payment routes
     const isPaymentRoute = pathname?.startsWith('/pay/')
     
-        // pathname?.startsWith('/payment/') ||
+        || pathname?.startsWith('/product/')
+        // pathname?.startsWith('/payment/')
         // pathname?.startsWith('/claim/');
 
     if (isPaymentRoute) {

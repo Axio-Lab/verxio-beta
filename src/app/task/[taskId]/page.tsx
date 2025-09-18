@@ -164,28 +164,24 @@ export default function TaskParticipationPage() {
             {/* Countdown */}
             <Card className="bg-black/50 border-white/10 text-white">
               <CardContent className="pt-6">
-                {timeLeft ? (
-                  <div className="grid grid-cols-4 gap-2 text-center">
-                    <div className="bg-zinc-800 p-2 rounded">
-                      <div className="text-white font-bold">{timeLeft.days}</div>
-                      <div className="text-zinc-400 text-xs">Days</div>
-                    </div>
-                    <div className="bg-zinc-800 p-2 rounded">
-                      <div className="text-white font-bold">{timeLeft.hours}</div>
-                      <div className="text-zinc-400 text-xs">Hours</div>
-                    </div>
-                    <div className="bg-zinc-800 p-2 rounded">
-                      <div className="text-white font-bold">{timeLeft.minutes}</div>
-                      <div className="text-zinc-400 text-xs">Minutes</div>
-                    </div>
-                    <div className="bg-zinc-800 p-2 rounded">
-                      <div className="text-white font-bold">{timeLeft.seconds}</div>
-                      <div className="text-zinc-400 text-xs">Seconds</div>
-                    </div>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="bg-zinc-800 p-2 rounded">
+                    <div className="text-white font-bold">{timeLeft?.days || 0}</div>
+                    <div className="text-zinc-400 text-xs">Days</div>
                   </div>
-                ) : (
-                  <div className="text-center text-red-400 text-sm">Task has expired</div>
-                )}
+                  <div className="bg-zinc-800 p-2 rounded">
+                    <div className="text-white font-bold">{timeLeft?.hours || 0}</div>
+                    <div className="text-zinc-400 text-xs">Hours</div>
+                  </div>
+                  <div className="bg-zinc-800 p-2 rounded">
+                    <div className="text-white font-bold">{timeLeft?.minutes || 0}</div>
+                    <div className="text-zinc-400 text-xs">Minutes</div>
+                  </div>
+                  <div className="bg-zinc-800 p-2 rounded">
+                    <div className="text-white font-bold">{timeLeft?.seconds || 0}</div>
+                    <div className="text-zinc-400 text-xs">Seconds</div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -195,6 +191,15 @@ export default function TaskParticipationPage() {
                 <CardTitle className="text-lg text-white">{task.taskName}</CardTitle>
               </CardHeader>
               <CardContent>
+                {task.image && (
+                  <div className="w-full h-48 overflow-hidden rounded-lg mb-4">
+                    <img
+                      src={task.image}
+                      alt={task.taskName}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
                 <div className="space-y-1 text-sm">
                   <div className="text-zinc-400">To-Do: <span className="text-white">{task.taskDescription}</span></div>
                   <div className="text-zinc-400">Points: <span className="text-white">{task.pointsPerAction} verxio points</span></div>
@@ -230,7 +235,11 @@ export default function TaskParticipationPage() {
                   >
                     <div className="flex items-center gap-2 justify-center text-sm">
                       {submitting ? <VerxioLoaderWhite size="sm" /> : <Check className="w-4 h-4" />}
-                      <span>{submitting ? 'Submitting...' : 'Submit'}</span>
+                      <span>
+                        {submitting ? 'Submitting...' : 
+                         !timeLeft ? 'Task has expired' : 
+                         'Submit'}
+                      </span>
                     </div>
                   </button>
                 ) : (

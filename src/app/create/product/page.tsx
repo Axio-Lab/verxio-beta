@@ -1,41 +1,9 @@
-'use client';
+import { ProductCheckoutCard } from "@/components/layout/create/product/product-checkout";
 
-import { useState, useEffect } from 'react';
-import { AppLayout } from '@/components/layout/app-layout';
-import { ProductCheckoutCard } from '@/components/layout/create/product/product-checkout';
-import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
-
-export default function ProductPage() {
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Show loading for a brief moment
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleClose = () => {
-    // Navigate back to create page
-    window.history.back();
-  };
-
-  if (isLoading) {
-    return (
-      <AppLayout currentPage="create">
-        <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)] pt-24 pb-8">
-          <VerxioLoaderWhite size="md" />
-        </div>
-      </AppLayout>
-    );
-  }
-
+export default function CreateProductPage() {
   return (
-    <AppLayout currentPage="create">
-      <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)] pt-8 pb-8">
-        <ProductCheckoutCard onClose={handleClose} />
-      </div>
-    </AppLayout>
+    <div className="min-h-screen bg-black flex items-center justify-center p-6">
+      <ProductCheckoutCard />
+    </div>
   );
-} 
+}

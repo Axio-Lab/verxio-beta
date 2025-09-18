@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
-import { getVerxioConfig, getTotalMembersAcrossPrograms, getUserLoyaltyPasses } from './loyalty';
+import { getVerxioConfig, getTotalMembersAcrossPrograms } from './loyalty';
 import { getUserVerxioCreditBalance } from './verxio-credit';
 
 export interface UserStats {
@@ -18,7 +18,9 @@ export interface UserStats {
     loyaltyDiscount: string;
     createdAt: string;
     reference: string;
-    type: 'payment' | 'transfer';
+    type: 'payment' | 'transfer' | 'product';
+    productName?: string;
+    quantity?: number;
   }>;
 }
 
@@ -71,7 +73,7 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
       }
     }
 
-    // 4. Get Total Revenue Collected (Payments + Transfers)
+    // 4. Get Total Revenue Collected (Payments + Transfers + Products)
     const revenuePayments = await prisma.paymentRecord.findMany({
       where: {
         recipient: userAddress,
@@ -92,8 +94,21 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
       }
     });
 
+    const revenueProducts = await prisma.productPurchase.findMany({
+      where: {
+        product: {
+          creatorAddress: userAddress
+        },
+        status: 'COMPLETED'
+      },
+      select: {
+        totalAmount: true
+      }
+    });
+
     const totalRevenue = revenuePayments.reduce((sum: number, payment: any) => sum + parseFloat(payment.amount), 0) +
-      revenueTransfers.reduce((sum: number, transfer: any) => sum + transfer.amount, 0);
+      revenueTransfers.reduce((sum: number, transfer: any) => sum + transfer.amount, 0) +
+      revenueProducts.reduce((sum: number, product: any) => sum + product.totalAmount, 0);
 
     // 5. Get Total Discounts Given
     const discountPayments = await prisma.paymentRecord.findMany({
@@ -134,7 +149,7 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
     // 8. Combine Verxio Credits and Points
     // const totalVerxioBalance = verxioCreditBalance + verxioPoints;
 
-    // 7. Get Recent Payment & Transfer Activity
+    // 7. Get Recent Payment, Transfer & Product Activity
     const recentPayments = await prisma.paymentRecord.findMany({
       where: {
         recipient: userAddress,
@@ -164,6 +179,28 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
       }
     });
 
+    const recentProducts = await prisma.productPurchase.findMany({
+      where: {
+        product: {
+          creatorAddress: userAddress
+        },
+        status: 'COMPLETED'
+      },
+      orderBy: { purchasedAt: 'desc' },
+      take: 5,
+      select: {
+        totalAmount: true,
+        quantity: true,
+        purchasedAt: true,
+        id: true,
+        product: {
+          select: {
+            productName: true
+          }
+        }
+      }
+    });
+
     // Combine and sort by creation date, take the most recent 5
     const allRecentActivity = [
       ...recentPayments.map((payment: any) => ({
@@ -179,6 +216,15 @@ export const getUserStats = async (userAddress: string): Promise<{ success: bool
         createdAt: transfer.createdAt,
         reference: `transfer_${transfer.id}`,
         type: 'transfer' as const
+      })),
+      ...recentProducts.map((product: any) => ({
+        amount: product.totalAmount.toString(),
+        loyaltyDiscount: '0',
+        createdAt: product.purchasedAt,
+        reference: `product_${product.id}`,
+        type: 'product' as const,
+        productName: product.product.productName,
+        quantity: product.quantity
       }))
     ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);

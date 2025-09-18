@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { useParams, useRouter } from 'next/navigation';
 import { getTaskById, getTaskParticipations, moderateTaskSubmission, selectTaskWinners } from '@/app/actions/task';
-import { ArrowLeft, Check, X, Copy, Check as CheckIcon } from 'lucide-react';
+import { ArrowLeft, Check, X, Copy, Check as CheckIcon, Calendar, Users, Trophy, DollarSign, ExternalLink } from 'lucide-react';
 import { usePrivy } from '@privy-io/react-auth';
 
 export default function ManageTaskDetailPage() {
@@ -118,13 +118,13 @@ export default function ManageTaskDetailPage() {
   return (
     <AppLayout currentPage="dashboard">
       <div className="max-w-md mx-auto space-y-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4 mb-2">
           <button onClick={() => router.back()} className="p-2 border border-white/20 rounded-lg hover:bg-white/10 transition-colors text-white">
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Task Submissions</h1>
-            <p className="text-white/60 text-sm">Review and approve/reject</p>
+          <div className="text-center flex-1">
+            <h1 className="text-2xl font-bold text-white">{task?.taskName || 'Task Details'}</h1>
+            <p className="text-white/60 text-sm">Task Information & Submissions</p>
           </div>
         </div>
 
@@ -135,38 +135,73 @@ export default function ManageTaskDetailPage() {
         ) : (
           <>
             {task && (
-              <Card className="bg-black/50 border-white/10 text-white">
-                <CardHeader>
-                  <CardTitle className="text-lg text-white">{task.taskName}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-white/60 mb-1">{task.taskDescription}</div>
-                  <div className="text-xs text-white/60">Participants: {task.totalParticipants} / {task.maxParticipants}</div>
-                  {/* Shareable link */}
-                  <div className="mt-3">
-                    <div className="text-xs text-white/70 mb-1">Share participation link</div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 text-xs truncate text-white/80 border border-white/10 rounded-md px-3 py-2 bg-white/5">
-                        {typeof window !== 'undefined' ? `${window.location.origin}/task/${taskId}` : `/task/${taskId}`}
+              <>
+                {/* Task Information */}
+                <Card className="bg-black/50 border-white/10 text-white">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <Trophy className="w-5 h-5" />
+                      Task Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {task.image && (
+                      <div className="w-full h-48 overflow-hidden rounded-lg">
+                        <img
+                          src={task.image}
+                          alt={task.taskName}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const url = typeof window !== 'undefined' ? `${window.location.origin}/task/${taskId}` : `/task/${taskId}`;
-                            await navigator.clipboard.writeText(url);
-                            setCopied(true);
-                            setTimeout(() => setCopied(false), 1500);
-                          } catch {}
-                        }}
-                        className="p-2 border border-white/20 rounded-lg hover:bg-white/10 transition-colors text-white"
-                        title="Copy link"
-                      >
-                        {copied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                      </button>
+                    )}
+                    
+                    <div className="space-y-1 text-sm">
+                      <div className="text-zinc-400">Description: <span className="text-white">{task.taskDescription}</span></div>
+                      <div className="text-zinc-400">Points: <span className="text-white">{task.pointsPerAction} verxio points</span></div>
+                      <div className="text-zinc-400">Prize Pool: <span className="text-white">${task.prizePool}</span></div>
+                      <div className="text-zinc-400">Participants: <span className="text-white">{task.totalParticipants} / {task.maxParticipants}</span></div>
+                      <div className="text-zinc-400">Winners: <span className="text-white">{task.numberOfWinners}</span></div>
+                      <div className="text-zinc-400">Status: <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                        task.status === 'ACTIVE' ? 'border-green-500/50 text-green-400 bg-green-500/10' :
+                        task.status === 'COMPLETED' ? 'border-blue-500/50 text-blue-400 bg-blue-500/10' :
+                        'border-red-500/50 text-red-400 bg-red-500/10'
+                      }`}>
+                        {task.status}
+                      </span></div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+
+                    <div>
+                      <p className="text-zinc-400 text-sm mb-2">Share participation link</p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 text-xs truncate text-white/80 border border-white/10 rounded-md px-3 py-2 bg-white/5">
+                          {typeof window !== 'undefined' ? `${window.location.origin}/task/${taskId}` : `/task/${taskId}`}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const url = typeof window !== 'undefined' ? `${window.location.origin}/task/${taskId}` : `/task/${taskId}`;
+                              await navigator.clipboard.writeText(url);
+                              setCopied(true);
+                              setTimeout(() => setCopied(false), 1500);
+                            } catch {}
+                          }}
+                          className="p-2 border border-white/20 rounded-lg hover:bg-white/10 transition-colors text-white"
+                          title="Copy link"
+                        >
+                          {copied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => window.open(`/task/${taskId}`, '_blank')}
+                          className="p-2 border border-white/20 rounded-lg hover:bg-white/10 transition-colors text-white"
+                          title="Open in new tab"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
             )}
 
             <Card className="bg-black/50 border-white/10 text-white">

@@ -29,6 +29,9 @@ export default function Dashboard() {
       loyaltyDiscount: string;
       createdAt: string;
       reference: string;
+      type: 'payment' | 'transfer' | 'product';
+      productName?: string;
+      quantity?: number;
     }>
   });
   const [statsLoading, setStatsLoading] = useState(true);
@@ -357,24 +360,40 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="relative z-10 pt-0">
               <div className="space-y-3">
-                {stats.recentPayments.map((payment, index) => (
+                {stats.recentPayments.map((activity, index) => (
                   <div key={index} className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="text-sm font-medium text-white mb-1">
-                          Payment: {payment.reference.slice(0, 8)}...
+                          {activity.type === 'product' ? (
+                            <>
+                              Product Sale: {activity.productName}
+                              {activity.quantity && activity.quantity > 1 && (
+                                <span className="text-xs text-white/60 ml-1">(x{activity.quantity})</span>
+                              )}
+                            </>
+                          ) : activity.type === 'transfer' ? (
+                            `Transfer: ${activity.reference.slice(0, 8)}...`
+                          ) : (
+                            `Payment: ${activity.reference.slice(0, 8)}...`
+                          )}
                         </div>
                         <div className="text-xs text-white/60 font-medium uppercase tracking-wider">
-                          {new Date(payment.createdAt).toLocaleDateString()}
+                          {new Date(activity.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-bold text-green-400 mb-1">
-                          ${parseFloat(payment.amount).toLocaleString()}
+                          ${parseFloat(activity.amount).toLocaleString()}
                         </div>
-                        {payment.loyaltyDiscount !== '0' && (
+                        {activity.loyaltyDiscount !== '0' && (
                           <div className="text-xs text-blue-400 font-medium">
-                            -${payment.loyaltyDiscount} discount
+                            -${activity.loyaltyDiscount} discount
+                          </div>
+                        )}
+                        {activity.type === 'product' && (
+                          <div className="text-xs text-purple-400 font-medium">
+                            Product Sale
                           </div>
                         )}
                       </div>
