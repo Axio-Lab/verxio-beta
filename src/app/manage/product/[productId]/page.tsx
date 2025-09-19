@@ -268,11 +268,11 @@ export default function ProductDetailPage() {
               </div>
               <div>
                 <p className="text-zinc-400 text-sm">Available Quantity</p>
-                <p className="text-white font-medium">{product.quantity}</p>
+                <p className="text-white font-medium">{product.quantity.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-zinc-400 text-sm">Total Sold</p>
-                <p className="text-white font-medium">{product.totalSold}</p>
+                <p className="text-white font-medium">{product.totalSold.toLocaleString()}</p>
               </div>
             </div>
 

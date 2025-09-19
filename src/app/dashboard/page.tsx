@@ -205,10 +205,13 @@ export default function Dashboard() {
             {/* Action Buttons */}
             <div className="grid grid-cols-3 gap-2 mb-4">
               <button
-                onClick={handleFund}
-                className="flex items-center justify-center bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-3 px-2 rounded-lg font-medium transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-green-500/25"
+                disabled
+                className="flex items-center justify-center bg-gradient-to-r from-gray-600 to-gray-700 text-white/60 py-3 px-2 rounded-lg font-medium cursor-not-allowed relative shadow-lg"
               >
                 <span className="text-sm">Fund</span>
+                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs px-1 py-0.5 rounded-full font-bold shadow-lg text-[9px]">
+                  Soon
+                </span>
               </button>
               <button
                 onClick={handleSendTokens}
