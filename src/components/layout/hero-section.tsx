@@ -111,7 +111,7 @@ export const AuroraHero = () => {
 
   return (
     <section className="relative grid min-h-screen place-content-center overflow-hidden bg-black px-4 py-24 text-white">
-      {isProcessing && (
+      {/* {isProcessing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="text-center">
             <div className="mb-4 inline-block">
@@ -120,7 +120,7 @@ export const AuroraHero = () => {
             <p className="text-white/80">Setting up your account…</p>
           </div>
         </div>
-      )}
+      )} */}
       <div className="relative z-10 flex flex-col items-center">
         <span className="mb-1.5 inline-block rounded-full bg-[#117ba6]/40 px-3 py-1.5 text-sm text-white border border-white/20">
           Beta Now Live

@@ -148,7 +148,7 @@ export default function ManageProductsPage() {
                         <div className="text-xs text-blue-400 font-medium">{product.status}</div>
                       </div>
                       <div className="text-xs text-white/60">
-                        ${product.amount} • {product.totalSold} sold • {product.quantity} available
+                        ${product.amount} • {product.totalSold.toLocaleString()} sold • {product.quantity.toLocaleString()} available
                       </div>
                       <div className="text-[10px] text-white/40 mt-1">
                         {product.isProduct ? 'Product' : 'Service'} • {product.pointsPerPurchase} $VERXIO per purchase
