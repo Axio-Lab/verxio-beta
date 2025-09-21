@@ -336,3 +336,67 @@ enum PurchaseStatus {
   FAILED
   REFUNDED
 }
+
+model VoucherCollection {
+  id                 String   @id @default(cuid())
+  creator            String
+  collectionPublicKey String
+  /// @encrypted
+  collectionSecretKey String
+  signature          String
+  authorityPublicKey String
+  /// @encrypted
+  authoritySecretKey String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  vouchers           Voucher[]
+
+  @@index([creator])
+  @@index([collectionPublicKey])
+  @@map("voucher_collections")
+}
+
+model Voucher {
+  id                String        @id @default(cuid())
+  collectionId      String
+  voucherPublicKey  String
+  /// @encrypted
+  voucherPrivateKey String
+  recipient         String
+  voucherName       String
+  voucherType       VoucherType
+  value             Float
+  description       String
+  expiryDate        DateTime
+  maxUses           Int
+  currentUses       Int           @default(0)
+  transferable      Boolean       @default(true)
+  status            VoucherStatus @default(ACTIVE)
+  merchantId        String
+  signature         String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  collection        VoucherCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@index([collectionId])
+  @@index([recipient])
+  @@index([voucherPublicKey])
+  @@index([status])
+  @@index([expiryDate])
+  @@map("vouchers")
+}
+
+enum VoucherType {
+  PERCENTAGE_OFF
+  FIXED_VERXIO_CREDITS
+  FREE_ITEM
+  BUY_ONE_GET_ONE
+  CUSTOM_REWARD
+}
+
+enum VoucherStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  CANCELLED
+}

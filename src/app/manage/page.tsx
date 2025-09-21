@@ -88,6 +88,10 @@ export default function ManageLoyaltyProgram() {
     router.push('/pass');
   };
 
+  const handleVoucherManagement = () => {
+    router.push('/manage/voucher');
+  };
+
   if (isLoading) {
     return (
       <AppLayout currentPage="dashboard">
@@ -144,6 +148,21 @@ export default function ManageLoyaltyProgram() {
                   <div className="text-left">
                     <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">View Loyalty Passes</div>
                     <div className="text-xs text-gray-300">See all issued passes</div>
+                  </div>
+                </div>
+              </button>
+
+              <button 
+                onClick={handleVoucherManagement}
+                className="w-full p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-lg">
+                    <Gift className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Voucher Management</div>
+                    <div className="text-xs text-gray-300">Create and manage vouchers</div>
                   </div>
                 </div>
               </button>

@@ -1,7 +1,32 @@
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults'
-import { revokeLoyaltyPoints, giftLoyaltyPoints, issueLoyaltyPass } from '@verxioprotocol/core'
-import { VerxioContext, createLoyaltyProgram as createLoyaltyProgramCore } from '@verxioprotocol/core'
-import { publicKey, signerIdentity, Signer, KeypairSigner, keypairIdentity, createSignerFromKeypair } from '@metaplex-foundation/umi'
+import { 
+  VerxioContext, 
+  createLoyaltyProgram as createLoyaltyProgramCore,
+  createVoucherCollection,
+  mintVoucher,
+  redeemVoucher,
+  cancelVoucher,
+  validateVoucher,
+  extendVoucherExpiry,
+  getUserVouchers,
+  revokeLoyaltyPoints, 
+  giftLoyaltyPoints, 
+  issueLoyaltyPass,
+  CreateVoucherCollectionConfig,
+  MintVoucherConfig,
+  RedeemVoucherConfig,
+  CancelVoucherConfig,
+  ValidateVoucherConfig,
+  ExtendVoucherExpiryConfig,
+  GetUserVouchersConfig
+} from '@verxioprotocol/core'
+import { 
+  publicKey, 
+  signerIdentity, 
+  KeypairSigner, 
+  keypairIdentity, 
+  createSignerFromKeypair 
+} from '@metaplex-foundation/umi'
 import { convertSecretKeyToKeypair } from '@/lib/utils';
 
 export interface Tier {
@@ -146,5 +171,77 @@ export const giftPoints = async (context: VerxioContext, params: GiftPointsParam
         console.error('Error gifting loyalty points:', error)
         throw error
     }
+}
+
+// Voucher Collection Functions
+export const createVoucherCollectionCore = async (context: VerxioContext, params: CreateVoucherCollectionConfig) => {
+  try {
+    const result = await createVoucherCollection(context, params)
+    return { success: true, result }
+  } catch (error) {
+    console.error('Voucher collection creation error:', error)
+    return { success: false, error: `Voucher collection creation failed` }
+  }
+}
+
+// Voucher Functions
+export const mintVoucherCore = async (context: VerxioContext, params: MintVoucherConfig) => {
+  try {
+    const result = await mintVoucher(context, params)
+    return { success: true, result }
+  } catch (error) {
+    console.error('Voucher minting error:', error)
+    return { success: false, error: `Voucher minting failed` }
+  }
+}
+
+export const validateVoucherCore = async (context: VerxioContext, params: ValidateVoucherConfig) => {
+  try {
+    const result = await validateVoucher(context, params)
+    return { success: true, result }
+  } catch (error) {
+    console.error('Voucher validation error:', error)
+    return { success: false, error: `Voucher validation failed` }
+  }
+}
+
+export const redeemVoucherCore = async (context: VerxioContext, params: RedeemVoucherConfig) => {
+  try {
+    const result = await redeemVoucher(context, params)
+    return { success: true, result }
+  } catch (error) {
+    console.error('Voucher redemption error:', error)
+    return { success: false, error: `Voucher redemption failed` }
+  }
+}
+
+export const cancelVoucherCore = async (context: VerxioContext, params: CancelVoucherConfig) => {
+  try {
+    const result = await cancelVoucher(context, params)
+    return { success: true, result }
+  } catch (error) {
+    console.error('Voucher cancellation error:', error)
+    return { success: false, error: `Voucher cancellation failed` }
+  }
+}
+
+export const extendVoucherExpiryCore = async (context: VerxioContext, params: ExtendVoucherExpiryConfig) => {
+  try {
+    const result = await extendVoucherExpiry(context, params)
+    return { success: true, result }
+  } catch (error) {
+    console.error('Voucher expiry extension error:', error)
+    return { success: false, error: `Voucher expiry extension failed` }
+  }
+}
+
+export const getUserVouchersCore = async (context: VerxioContext, params: GetUserVouchersConfig) => {
+  try {
+    const result = await getUserVouchers(context, params)
+    return { success: true, result }
+  } catch (error) {
+    console.error('Get user vouchers error:', error)
+    return { success: false, error: `Failed to get user vouchers` }
+  }
 }
 

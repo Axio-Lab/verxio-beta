@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
-import { ProductCheckoutCard } from '@/components/layout/create/product/product-checkout';
+import { VoucherCheckoutCard } from '@/components/layout/create/voucher/voucher-checkout';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 
-export default function CreateProductPage() {
+export default function CreateVoucherPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Show loading for a brief moment
@@ -24,7 +24,7 @@ export default function CreateProductPage() {
   if (isLoading) {
     return (
       <AppLayout currentPage="create">
-        <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)] pt-8 pb-8">
+        <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)] pt-24 pb-8">
           <VerxioLoaderWhite size="md" />
         </div>
       </AppLayout>
@@ -33,8 +33,8 @@ export default function CreateProductPage() {
 
   return (
     <AppLayout currentPage="create">
-      <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)] pt-8 pb-8">
-        <ProductCheckoutCard onClose={handleClose} />
+      <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)] pt-24 pb-8">
+        <VoucherCheckoutCard onClose={handleClose} />
       </div>
     </AppLayout>
   );

@@ -1,0 +1,691 @@
+'use server'
+
+import { prisma } from '@/lib/prisma'
+import { generateSigner } from '@metaplex-foundation/umi'
+import { publicKey } from '@metaplex-foundation/umi'
+import { uint8ArrayToBase58String } from '@/lib/utils'
+import { 
+  initializeVerxio, 
+  createVoucherCollectionCore,
+  mintVoucherCore,
+  validateVoucherCore,
+  redeemVoucherCore,
+  cancelVoucherCore,
+  extendVoucherExpiryCore,
+  getUserVouchersCore
+} from './verxio'
+import { getVerxioConfig } from './loyalty'
+import { getUserVerxioCreditBalance, awardOrRevokeLoyaltyPoints } from './verxio-credit'
+import { getVoucherCollectionDetails } from '@/lib/voucher/getVoucherDetails'
+
+// Create Voucher Collection
+export interface CreateVoucherCollectionData {
+  creatorAddress: string
+  voucherCollectionName: string
+  merchantName: string
+  merchantAddress: string
+  contactInfo?: string
+  voucherTypes: string[]
+  description?: string
+  imageUri?: string
+  metadataUri?: string
+}
+
+export interface CreateVoucherCollectionResult {
+  success: boolean
+  collection?: {
+    id: string
+    collectionPublicKey: string
+    signature: string
+  }
+  error?: string
+}
+
+export const createVoucherCollection = async (data: CreateVoucherCollectionData): Promise<CreateVoucherCollectionResult> => {
+  try {
+    const { creatorAddress, voucherCollectionName, merchantName, merchantAddress, contactInfo, voucherTypes, description, imageUri, metadataUri } = data
+
+    // Check if user has sufficient Verxio credits (minimum 5000 required)
+    const creditCheck = await getUserVerxioCreditBalance(creatorAddress)
+    if (!creditCheck.success || (creditCheck.balance || 0) < 5000) {
+      return {
+        success: false,
+        error: `Insufficient Verxio credits. You need at least 5000 credits to create a voucher collection. Current balance: ${creditCheck.balance || 0} credits.`
+      }
+    }
+
+    // Get Verxio configuration
+    const config = await getVerxioConfig()
+    const initializeContext = await initializeVerxio(creatorAddress, config.rpcEndpoint, config.privateKey!)
+    
+    if (!initializeContext.success || !initializeContext.context) {
+      return {
+        success: false,
+        error: `Initialization failed: ${initializeContext.error}`
+      }
+    }
+
+    // Create voucher collection
+    const createResult = await createVoucherCollectionCore(initializeContext.context, {
+      voucherCollectionName,
+      programAuthority: publicKey(creatorAddress),
+      updateAuthority: generateSigner(initializeContext.context.umi),
+      metadata: {
+        merchantName,
+        merchantAddress,
+        contactInfo,
+        voucherTypes
+      },
+      description,
+      metadataUri: metadataUri || undefined
+    })
+
+    if (!createResult.success || !createResult.result) {
+      return {
+        success: false,
+        error: createResult.error || 'Failed to create voucher collection'
+      }
+    }
+
+    const { collection, signature, updateAuthority } = createResult.result
+
+    // Save to database
+    const savedCollection = await prisma.voucherCollection.create({
+      data: {
+        creator: creatorAddress,
+        collectionPublicKey: collection.publicKey,
+        collectionSecretKey: uint8ArrayToBase58String(collection.secretKey),
+        signature,
+        authorityPublicKey: updateAuthority?.publicKey || collection.publicKey,
+        authoritySecretKey: updateAuthority ? uint8ArrayToBase58String(updateAuthority.secretKey) : uint8ArrayToBase58String(collection.secretKey)
+      }
+    })
+
+    // Deduct 1000 Verxio credits for collection creation
+    const deductionResult = await awardOrRevokeLoyaltyPoints({
+      creatorAddress,
+      points: 1000,
+      assetAddress: collection.publicKey,
+      assetOwner: creatorAddress,
+      action: 'REVOKE'
+    })
+
+    if (!deductionResult.success) {
+      console.error('Failed to deduct Verxio credits:', deductionResult.error)
+    }
+
+    return {
+      success: true,
+      collection: {
+        id: savedCollection.id,
+        collectionPublicKey: collection.publicKey,
+        signature
+      }
+    }
+  } catch (error: any) {
+    console.error('Error creating voucher collection:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to create voucher collection'
+    }
+  }
+}
+
+// Get User Voucher Collections
+export const getUserVoucherCollections = async (creatorAddress: string, page: number = 1, limit: number = 10) => {
+  try {
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const [collections, totalCount] = await Promise.all([
+      prisma.voucherCollection.findMany({
+        where: {
+          creator: creatorAddress
+        },
+        include: {
+          vouchers: {
+            select: {
+              id: true,
+              voucherName: true,
+              voucherType: true,
+              value: true,
+              status: true,
+              expiryDate: true,
+              recipient: true,
+              currentUses: true,
+              maxUses: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        skip,
+        take
+      }),
+      prisma.voucherCollection.count({
+        where: {
+          creator: creatorAddress
+        }
+      })
+    ])
+
+    // Fetch collection details from blockchain for each collection
+    const collectionsWithDetails = await Promise.all(
+      collections.map(async (collection: any) => {
+        try {
+          const details = await getVoucherCollectionDetails(collection.collectionPublicKey);
+          return {
+            ...collection,
+            collectionName: details.success ? details.data?.name : 'Unknown Collection',
+            collectionImage: details.success ? details.data?.image : null,
+            voucherStats: details.success ? details.data?.voucherStats : null
+          };
+        } catch (error) {
+          console.error('Error fetching collection details:', error);
+          return {
+            ...collection,
+            collectionName: 'Unknown Collection',
+            collectionImage: null,
+            voucherStats: null
+          };
+        }
+      })
+    );
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      success: true,
+      collections: collectionsWithDetails,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        total: totalCount,
+        limit,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
+    }
+  } catch (error: any) {
+    console.error('Error fetching user voucher collections:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch voucher collections'
+    }
+  }
+}
+
+// Get Voucher Collection by ID
+export const getVoucherCollectionById = async (collectionId: string, creatorAddress: string) => {
+  try {
+    const collection = await prisma.voucherCollection.findFirst({
+      where: {
+        id: collectionId,
+        creator: creatorAddress
+      },
+      include: {
+        vouchers: {
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      }
+    })
+
+    if (!collection) {
+      return {
+        success: false,
+        error: 'Voucher collection not found'
+      }
+    }
+
+    return {
+      success: true,
+      collection
+    }
+  } catch (error: any) {
+    console.error('Error fetching voucher collection:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch voucher collection'
+    }
+  }
+}
+
+// Get Voucher Collection by Public Key
+export const getVoucherCollectionByPublicKey = async (collectionPublicKey: string, creatorAddress: string) => {
+  try {
+    const collection = await prisma.voucherCollection.findFirst({
+      where: {
+        collectionPublicKey: collectionPublicKey,
+        creator: creatorAddress
+      },
+      include: {
+        vouchers: {
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      }
+    })
+
+    if (!collection) {
+      return {
+        success: false,
+        error: 'Voucher collection not found'
+      }
+    }
+
+    // Fetch collection details from blockchain
+    const details = await getVoucherCollectionDetails(collectionPublicKey);
+    
+    return {
+      success: true,
+      collection: {
+        ...collection,
+        collectionName: details.success ? details.data?.name : 'Unknown Collection',
+        collectionImage: details.success ? details.data?.image : null,
+        voucherStats: details.success ? details.data?.voucherStats : null,
+        blockchainDetails: details.success ? details.data : null
+      }
+    }
+  } catch (error: any) {
+    console.error('Error fetching voucher collection by public key:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch voucher collection'
+    }
+  }
+}
+
+// Mint Voucher
+export interface MintVoucherData {
+  collectionId: string
+  recipient: string
+  voucherName: string
+  voucherType: 'PERCENTAGE_OFF' | 'FIXED_VERXIO_CREDITS' | 'FREE_ITEM' | 'BUY_ONE_GET_ONE' | 'CUSTOM_REWARD'
+  value: number
+  description: string
+  expiryDate: Date
+  maxUses: number
+  transferable?: boolean
+  merchantId: string
+}
+
+export interface MintVoucherResult {
+  success: boolean
+  voucher?: {
+    id: string
+    voucherPublicKey: string
+    signature: string
+  }
+  error?: string
+}
+
+export const mintVoucher = async (data: MintVoucherData, creatorAddress: string): Promise<MintVoucherResult> => {
+  try {
+    const { collectionId, recipient, voucherName, voucherType, value, description, expiryDate, maxUses, transferable = true, merchantId } = data
+
+    // Get collection and verify ownership
+    const collection = await prisma.voucherCollection.findFirst({
+      where: {
+        id: collectionId,
+        creator: creatorAddress
+      }
+    })
+
+    if (!collection) {
+      return {
+        success: false,
+        error: 'Voucher collection not found'
+      }
+    }
+
+    // Get Verxio configuration
+    const config = await getVerxioConfig()
+    const initializeContext = await initializeVerxio(creatorAddress, config.rpcEndpoint, config.privateKey!)
+    
+    if (!initializeContext.success || !initializeContext.context) {
+      return {
+        success: false,
+        error: `Initialization failed: ${initializeContext.error}`
+      }
+    }
+
+    // Create keypair for voucher
+    const assetSigner = generateSigner(initializeContext.context.umi)
+    const updateAuthority = generateSigner(initializeContext.context.umi)
+
+    // Mint voucher
+    const mintResult = await mintVoucherCore(initializeContext.context, {
+      collectionAddress: publicKey(collection.collectionPublicKey),
+      recipient: publicKey(recipient),
+      voucherName,
+      voucherData: {
+        type: voucherType.toLowerCase().replace('_', '_') as any,
+        value,
+        description,
+        expiryDate: Math.floor(expiryDate.getTime() / 1000),
+        maxUses,
+        transferable,
+        merchantId,
+        conditions: []
+      },
+      assetSigner,
+      updateAuthority
+    })
+
+    if (!mintResult.success || !mintResult.result) {
+      return {
+        success: false,
+        error: mintResult.error || 'Failed to mint voucher'
+      }
+    }
+
+    const { asset, signature } = mintResult.result
+
+    // Save to database
+    const savedVoucher = await prisma.voucher.create({
+      data: {
+        collectionId,
+        voucherPublicKey: asset.publicKey,
+        voucherPrivateKey: uint8ArrayToBase58String(asset.secretKey),
+        recipient,
+        voucherName,
+        voucherType,
+        value,
+        description,
+        expiryDate,
+        maxUses,
+        transferable,
+        merchantId,
+        signature
+      }
+    })
+
+    return {
+      success: true,
+      voucher: {
+        id: savedVoucher.id,
+        voucherPublicKey: asset.publicKey,
+        signature
+      }
+    }
+  } catch (error: any) {
+    console.error('Error minting voucher:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to mint voucher'
+    }
+  }
+}
+
+// Validate Voucher
+export const validateVoucher = async (voucherId: string, creatorAddress: string) => {
+  try {
+    const voucher = await prisma.voucher.findFirst({
+      where: {
+        id: voucherId,
+        collection: {
+          creator: creatorAddress
+        }
+      }
+    })
+
+    if (!voucher) {
+      return {
+        success: false,
+        error: 'Voucher not found'
+      }
+    }
+
+    // Get Verxio configuration
+    const config = await getVerxioConfig()
+    const initializeContext = await initializeVerxio(creatorAddress, config.rpcEndpoint, config.privateKey!)
+    
+    if (!initializeContext.success || !initializeContext.context) {
+      return {
+        success: false,
+        error: `Initialization failed: ${initializeContext.error}`
+      }
+    }
+
+    // Validate voucher
+    const validateResult = await validateVoucherCore(initializeContext.context, {
+      voucherAddress: publicKey(voucher.voucherPublicKey)
+    })
+
+    return validateResult
+  } catch (error: any) {
+    console.error('Error validating voucher:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to validate voucher'
+    }
+  }
+}
+
+// Redeem Voucher
+export const redeemVoucher = async (voucherId: string, merchantId: string, creatorAddress: string, redemptionAmount?: number) => {
+  try {
+    const voucher = await prisma.voucher.findFirst({
+      where: {
+        id: voucherId,
+        collection: {
+          creator: creatorAddress
+        }
+      }
+    })
+
+    if (!voucher) {
+      return {
+        success: false,
+        error: 'Voucher not found'
+      }
+    }
+
+    // Get Verxio configuration
+    const config = await getVerxioConfig()
+    const initializeContext = await initializeVerxio(creatorAddress, config.rpcEndpoint, config.privateKey!)
+    
+    if (!initializeContext.success || !initializeContext.context) {
+      return {
+        success: false,
+        error: `Initialization failed: ${initializeContext.error}`
+      }
+    }
+
+    // Create update authority signer
+    const updateAuthority = generateSigner(initializeContext.context.umi)
+
+    // Redeem voucher
+    const redeemResult = await redeemVoucherCore(initializeContext.context, {
+      voucherAddress: publicKey(voucher.voucherPublicKey),
+      updateAuthority,
+      merchantId,
+      redemptionAmount,
+      redemptionDetails: {
+        transactionId: `redeem_${voucherId}_${Date.now()}`,
+        totalAmount: redemptionAmount || voucher.value
+      }
+    })
+
+    if (redeemResult.success) {
+      // Update voucher in database
+      await prisma.voucher.update({
+        where: { id: voucherId },
+        data: {
+          currentUses: voucher.currentUses + 1,
+          status: voucher.currentUses + 1 >= voucher.maxUses ? 'USED' : 'ACTIVE'
+        }
+      })
+    }
+
+    return redeemResult
+  } catch (error: any) {
+    console.error('Error redeeming voucher:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to redeem voucher'
+    }
+  }
+}
+
+// Cancel Voucher
+export const cancelVoucher = async (voucherId: string, reason: string, creatorAddress: string) => {
+  try {
+    const voucher = await prisma.voucher.findFirst({
+      where: {
+        id: voucherId,
+        collection: {
+          creator: creatorAddress
+        }
+      }
+    })
+
+    if (!voucher) {
+      return {
+        success: false,
+        error: 'Voucher not found'
+      }
+    }
+
+    // Get Verxio configuration
+    const config = await getVerxioConfig()
+    const initializeContext = await initializeVerxio(creatorAddress, config.rpcEndpoint, config.privateKey!)
+    
+    if (!initializeContext.success || !initializeContext.context) {
+      return {
+        success: false,
+        error: `Initialization failed: ${initializeContext.error}`
+      }
+    }
+
+    // Create update authority signer
+    const updateAuthority = generateSigner(initializeContext.context.umi)
+
+    // Cancel voucher
+    const cancelResult = await cancelVoucherCore(initializeContext.context, {
+      voucherAddress: publicKey(voucher.voucherPublicKey),
+      updateAuthority,
+      reason
+    })
+
+    if (cancelResult.success) {
+      // Update voucher status in database
+      await prisma.voucher.update({
+        where: { id: voucherId },
+        data: {
+          status: 'CANCELLED'
+        }
+      })
+    }
+
+    return cancelResult
+  } catch (error: any) {
+    console.error('Error cancelling voucher:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to cancel voucher'
+    }
+  }
+}
+
+// Extend Voucher Expiry
+export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date, creatorAddress: string) => {
+  try {
+    const voucher = await prisma.voucher.findFirst({
+      where: {
+        id: voucherId,
+        collection: {
+          creator: creatorAddress
+        }
+      }
+    })
+
+    if (!voucher) {
+      return {
+        success: false,
+        error: 'Voucher not found'
+      }
+    }
+
+    // Get Verxio configuration
+    const config = await getVerxioConfig()
+    const initializeContext = await initializeVerxio(creatorAddress, config.rpcEndpoint, config.privateKey!)
+    
+    if (!initializeContext.success || !initializeContext.context) {
+      return {
+        success: false,
+        error: `Initialization failed: ${initializeContext.error}`
+      }
+    }
+
+    // Create update authority signer
+    const updateAuthority = generateSigner(initializeContext.context.umi)
+
+    // Extend voucher expiry
+    const extendResult = await extendVoucherExpiryCore(initializeContext.context, {
+      voucherAddress: publicKey(voucher.voucherPublicKey),
+      updateAuthority,
+      newExpiryDate: Math.floor(newExpiryDate.getTime() / 1000)
+    })
+
+    if (extendResult.success) {
+      // Update voucher expiry in database
+      await prisma.voucher.update({
+        where: { id: voucherId },
+        data: {
+          expiryDate: newExpiryDate
+        }
+      })
+    }
+
+    return extendResult
+  } catch (error: any) {
+    console.error('Error extending voucher expiry:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to extend voucher expiry'
+    }
+  }
+}
+
+// Get User Vouchers (for recipients)
+export const getUserVouchers = async (userAddress: string, collectionAddress?: string) => {
+  try {
+    const vouchers = await prisma.voucher.findMany({
+      where: {
+        recipient: userAddress,
+        ...(collectionAddress && {
+          collection: {
+            collectionPublicKey: collectionAddress
+          }
+        })
+      },
+      include: {
+        collection: {
+          select: {
+            id: true,
+            collectionPublicKey: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
+
+    return {
+      success: true,
+      vouchers
+    }
+  } catch (error: any) {
+    console.error('Error fetching user vouchers:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch user vouchers'
+    }
+  }
+}
