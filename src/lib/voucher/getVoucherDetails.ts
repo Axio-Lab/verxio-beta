@@ -1,3 +1,6 @@
+import { getVerxioConfig } from '@/app/actions/loyalty';
+
+const { rpcEndpoint } = await getVerxioConfig();
 export interface VoucherCollectionDetails {
   id: string;
   name: string;
@@ -29,8 +32,8 @@ export const getVoucherCollectionDetails = async (voucherAddress: string): Promi
   error?: string;
 }> => {
   try {
-    const url = 'https://devnet.helius-rpc.com/?api-key=d7aa98e6-4f1e-420d-be26-231d5a586b93';
-    const options = {
+      const url = rpcEndpoint;
+      const options = {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({

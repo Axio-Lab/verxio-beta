@@ -41,7 +41,7 @@ export const VoucherCheckoutCard = ({
   const [contactInfo, setContactInfo] = useState("");
   const [description, setDescription] = useState("");
   const [voucherTypes, setVoucherTypes] = useState<VoucherType[]>([
-    { id: '1', type: 'Free Item' },
+    { id: '1', type: 'Select option' },
   ]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [countdown, setCountdown] = useState(5);
@@ -85,7 +85,7 @@ export const VoucherCheckoutCard = ({
     const newId = (voucherTypes.length + 1).toString();
     setVoucherTypes([...voucherTypes, {
       id: newId,
-      type: 'Free Item'
+      type: 'Select option'
     }]);
   };
 
@@ -97,7 +97,7 @@ export const VoucherCheckoutCard = ({
 
   const canRemoveVoucherType = (type: VoucherType) => {
     // Cannot remove default types
-    if (type.type === 'Free Item') return false;
+    if (type.type === 'Select option') return false;
     // Must have at least 1 type
     if (voucherTypes.length <= 1) return false;
     return true;
@@ -195,8 +195,8 @@ export const VoucherCheckoutCard = ({
             return `${type.customValue}`;
           }
           return type.type;
-        }).filter(Boolean),
-        description:  undefined,
+        }).filter(type => type !== 'Select option'),
+        description: description || undefined,
         imageUri: finalImageUrl || undefined,
         metadataUri: metadataUri || undefined
       };
@@ -313,6 +313,21 @@ export const VoucherCheckoutCard = ({
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="description" className="text-white text-base font-medium">Description</Label>
+                <Input
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Enter voucher collection description"
+                  maxLength={50}
+                  className="bg-black/20 border-white/20 text-white placeholder:text-white/40 h-12 text-base"
+                />
+                <div className="text-xs text-white/60 text-right">
+                  {description.length}/50 characters
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="merchantName" className="text-white text-base font-medium">Merchant Name</Label>
                 <Input
                   id="merchantName"
@@ -353,7 +368,9 @@ export const VoucherCheckoutCard = ({
                 {voucherTypes.map((type, index) => (
                   <div key={type.id} className="p-4 bg-black/20 rounded-lg border border-white/10 relative z-20">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-white font-medium">Type {index + 1}</span>
+                      <span className="text-white font-medium">
+                        {type.type === 'Select option' ? `Voucher Type ${index + 1}` : `${type.type} Voucher`}
+                      </span>
                       {canRemoveVoucherType(type) && (
                         <button
                           onClick={() => removeVoucherType(type.id)}
@@ -371,7 +388,7 @@ export const VoucherCheckoutCard = ({
                           value={type.type}
                           onChange={(value: string) => updateVoucherType(type.id, 'type', value)}
                           options={[
-                            { value: 'Percentage Off', label: 'Percentage Off' },
+                            { value: 'Select option', label: 'Select option' },
                             { value: 'Free Item', label: 'Free Item' },
                             { value: 'Buy One Get One', label: 'Buy One Get One' },
                             { value: 'Custom Reward', label: 'Custom Reward' }

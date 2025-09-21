@@ -1,9 +1,9 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { generateSigner } from '@metaplex-foundation/umi'
+import { createSignerFromKeypair, generateSigner } from '@metaplex-foundation/umi'
 import { publicKey } from '@metaplex-foundation/umi'
-import { uint8ArrayToBase58String } from '@/lib/utils'
+import { convertSecretKeyToKeypair, uint8ArrayToBase58String } from '@/lib/utils'
 import { 
   initializeVerxio, 
   createVoucherCollectionCore,
@@ -146,14 +146,10 @@ export const getUserVoucherCollections = async (creatorAddress: string, page: nu
           vouchers: {
             select: {
               id: true,
-              voucherName: true,
-              voucherType: true,
-              value: true,
-              status: true,
-              expiryDate: true,
+              voucherPublicKey: true,
               recipient: true,
-              currentUses: true,
-              maxUses: true
+              signature: true,
+              createdAt: true
             }
           }
         },
@@ -175,6 +171,7 @@ export const getUserVoucherCollections = async (creatorAddress: string, page: nu
       collections.map(async (collection: any) => {
         try {
           const details = await getVoucherCollectionDetails(collection.collectionPublicKey);
+          console.log(details, 'details')
           return {
             ...collection,
             collectionName: details.success ? details.data?.name : 'Unknown Collection',
@@ -253,6 +250,34 @@ export const getVoucherCollectionById = async (collectionId: string, creatorAddr
   }
 }
 
+// Get Voucher Authority Secret Key
+export const getVoucherAuthoritySecretKey = async (collectionAddress: string) => {
+  try {
+    const voucherCollection = await prisma.voucherCollection.findFirst({
+      where: {
+        collectionPublicKey: collectionAddress
+      },
+      select: {
+        authoritySecretKey: true,
+        authorityPublicKey: true
+      }
+    })
+
+    if (!voucherCollection) {
+      return { success: false, error: 'Voucher collection not found for this collection address' }
+    }
+
+    return { 
+      success: true, 
+      authoritySecretKey: voucherCollection.authoritySecretKey,
+      authorityPublicKey: voucherCollection.authorityPublicKey
+    }
+  } catch (error) {
+    console.error('Error fetching voucher collection authority secret key:', error)
+    return { success: false, error: 'Failed to fetch authority secret key' }
+  }
+}
+
 // Get Voucher Collection by Public Key
 export const getVoucherCollectionByPublicKey = async (collectionPublicKey: string, creatorAddress: string) => {
   try {
@@ -263,6 +288,13 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
       },
       include: {
         vouchers: {
+          select: {
+            id: true,
+            voucherPublicKey: true,
+            recipient: true,
+            signature: true,
+            createdAt: true
+          },
           orderBy: {
             createdAt: 'desc'
           }
@@ -311,6 +343,8 @@ export interface MintVoucherData {
   maxUses: number
   transferable?: boolean
   merchantId: string
+  conditions?: string
+  voucherMetadataUri?: string
 }
 
 export interface MintVoucherResult {
@@ -325,7 +359,7 @@ export interface MintVoucherResult {
 
 export const mintVoucher = async (data: MintVoucherData, creatorAddress: string): Promise<MintVoucherResult> => {
   try {
-    const { collectionId, recipient, voucherName, voucherType, value, description, expiryDate, maxUses, transferable = true, merchantId } = data
+    const { collectionId, recipient, voucherName, voucherType, value, description, expiryDate, maxUses, transferable = true, merchantId, voucherMetadataUri } = data
 
     // Get collection and verify ownership
     const collection = await prisma.voucherCollection.findFirst({
@@ -353,29 +387,36 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
       }
     }
 
+    // Create asset keypair using authority secret key
+    const voucherKeypair = createSignerFromKeypair(initializeContext.context.umi, convertSecretKeyToKeypair(collection.authoritySecretKey));
+
+
     // Create keypair for voucher
     const assetSigner = generateSigner(initializeContext.context.umi)
-    const updateAuthority = generateSigner(initializeContext.context.umi)
+    const updateAuthority = voucherKeypair
 
-    // Mint voucher
-    const mintResult = await mintVoucherCore(initializeContext.context, {
+    // Prepare mint data
+    const mintConfig = {
       collectionAddress: publicKey(collection.collectionPublicKey),
       recipient: publicKey(recipient),
-      voucherName,
+      voucherName: voucherName.substring(0, 32), // Limit voucher name length
       voucherData: {
         type: voucherType.toLowerCase().replace('_', '_') as any,
         value,
-        description,
-        expiryDate: Math.floor(expiryDate.getTime() / 1000),
+        description: description, // Limit description length
+        expiryDate: expiryDate.getTime(),
         maxUses,
         transferable,
-        merchantId,
-        conditions: []
+        merchantId: merchantId, // Limit merchant ID length
+        conditions: [] // Remove conditions from voucherData to avoid type conflicts
       },
       assetSigner,
-      updateAuthority
-    })
+      updateAuthority,
+      voucherMetadataUri: voucherMetadataUri
+    };
 
+    // Mint voucher
+    const mintResult = await mintVoucherCore(initializeContext.context, mintConfig)
     if (!mintResult.success || !mintResult.result) {
       return {
         success: false,
@@ -385,21 +426,13 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
 
     const { asset, signature } = mintResult.result
 
-    // Save to database
+    // Save to database (simplified schema - details come from blockchain)
     const savedVoucher = await prisma.voucher.create({
       data: {
         collectionId,
+        recipient,
         voucherPublicKey: asset.publicKey,
         voucherPrivateKey: uint8ArrayToBase58String(asset.secretKey),
-        recipient,
-        voucherName,
-        voucherType,
-        value,
-        description,
-        expiryDate,
-        maxUses,
-        transferable,
-        merchantId,
         signature
       }
     })
@@ -430,6 +463,9 @@ export const validateVoucher = async (voucherId: string, creatorAddress: string)
         collection: {
           creator: creatorAddress
         }
+      },
+      select: {
+        voucherPublicKey: true
       }
     })
 
@@ -475,6 +511,9 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
         collection: {
           creator: creatorAddress
         }
+      },
+      select: {
+        voucherPublicKey: true
       }
     })
 
@@ -511,16 +550,7 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
       }
     })
 
-    if (redeemResult.success) {
-      // Update voucher in database
-      await prisma.voucher.update({
-        where: { id: voucherId },
-        data: {
-          currentUses: voucher.currentUses + 1,
-          status: voucher.currentUses + 1 >= voucher.maxUses ? 'USED' : 'ACTIVE'
-        }
-      })
-    }
+    // Note: Voucher status and usage details are now managed on-chain
 
     return redeemResult
   } catch (error: any) {
@@ -541,6 +571,9 @@ export const cancelVoucher = async (voucherId: string, reason: string, creatorAd
         collection: {
           creator: creatorAddress
         }
+      },
+      select: {
+        voucherPublicKey: true
       }
     })
 
@@ -572,15 +605,7 @@ export const cancelVoucher = async (voucherId: string, reason: string, creatorAd
       reason
     })
 
-    if (cancelResult.success) {
-      // Update voucher status in database
-      await prisma.voucher.update({
-        where: { id: voucherId },
-        data: {
-          status: 'CANCELLED'
-        }
-      })
-    }
+    // Note: Voucher status is now managed on-chain
 
     return cancelResult
   } catch (error: any) {
@@ -601,6 +626,9 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
         collection: {
           creator: creatorAddress
         }
+      },
+      select: {
+        voucherPublicKey: true
       }
     })
 
@@ -632,15 +660,7 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
       newExpiryDate: Math.floor(newExpiryDate.getTime() / 1000)
     })
 
-    if (extendResult.success) {
-      // Update voucher expiry in database
-      await prisma.voucher.update({
-        where: { id: voucherId },
-        data: {
-          expiryDate: newExpiryDate
-        }
-      })
-    }
+    // Note: Voucher expiry is now managed on-chain
 
     return extendResult
   } catch (error: any) {
@@ -664,7 +684,12 @@ export const getUserVouchers = async (userAddress: string, collectionAddress?: s
           }
         })
       },
-      include: {
+      select: {
+        id: true,
+        voucherPublicKey: true,
+        recipient: true,
+        signature: true,
+        createdAt: true,
         collection: {
           select: {
             id: true,

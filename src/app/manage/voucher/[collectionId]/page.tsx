@@ -1,18 +1,47 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
+// Extend Window interface for timeout
+declare global {
+  interface Window {
+    emailCheckTimeout?: NodeJS.Timeout;
+  }
+}
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
 import { getVoucherCollectionByPublicKey, mintVoucher, validateVoucher, redeemVoucher, cancelVoucher, extendVoucherExpiry } from '@/app/actions/voucher';
+import { getUserByEmail } from '@/app/actions/user';
+import { generateImageUri } from '@/lib/metadata/generateImageURI';
+import { storeMetadata } from '@/app/actions/metadata';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Plus, Check, X, Clock, Gift, Users, DollarSign, Copy, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Plus, Check, X, Clock, Gift, Users, Copy, ExternalLink, Upload } from 'lucide-react';
 import { AppButton } from '@/components/ui/app-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CustomSelect } from '@/components/ui/custom-select';
 import { VerxioLoaderWhite as VerxioLoaderWhiteSmall } from '@/components/ui/verxio-loader-white';
+
+// Format condition string to proper display format
+const formatConditionString = (condition: string): string => {
+  if (!condition) return '';
+  
+  const conditionMap: { [key: string]: string } = {
+    'minimum_purchase_10': 'Minimum purchase $10',
+    'minimum_purchase_25': 'Minimum purchase $25',
+    'minimum_purchase_50': 'Minimum purchase $50',
+    'weekdays_only': 'Valid weekdays only',
+    'weekends_only': 'Valid weekends only',
+    'first_time_customer': 'First-time customers only',
+    'new_customer': 'New customers only',
+    'loyalty_member': 'Loyalty members only'
+  };
+  
+  // Return mapped value or fallback to formatted string
+  return conditionMap[condition] || condition.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
 
 interface VoucherCollection {
   id: string;
@@ -31,16 +60,6 @@ interface VoucherCollection {
     id: string;
     voucherPublicKey: string;
     recipient: string;
-    voucherName: string;
-    voucherType: string;
-    value: number;
-    description: string;
-    expiryDate: string;
-    maxUses: number;
-    currentUses: number;
-    transferable: boolean;
-    status: string;
-    merchantId: string;
     signature: string;
     createdAt: string;
   }>;
@@ -50,16 +69,6 @@ interface Voucher {
   id: string;
   voucherPublicKey: string;
   recipient: string;
-  voucherName: string;
-  voucherType: string;
-  value: number;
-  description: string;
-  expiryDate: string;
-  maxUses: number;
-  currentUses: number;
-  transferable: boolean;
-  status: string;
-  merchantId: string;
   signature: string;
   createdAt: string;
 }
@@ -69,36 +78,41 @@ export default function VoucherCollectionDetailPage() {
   const router = useRouter();
   const params = useParams();
   const collectionPublicKey = params.collectionId as string;
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [collection, setCollection] = useState<VoucherCollection | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Mint voucher states
   const [showMintForm, setShowMintForm] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
   const [mintData, setMintData] = useState({
     recipient: '',
-    voucherName: '',
     voucherType: 'PERCENTAGE_OFF' as const,
     value: '',
-    description: '',
     expiryDate: '',
-    maxUses: '',
+    maxUses: '1',
     transferable: true,
-    merchantId: ''
+    conditions: ''
   });
+  const [recipientWalletAddress, setRecipientWalletAddress] = useState<string | null>(null);
   const [isMinting, setIsMinting] = useState(false);
-  
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+
   // Operation states
   const [operatingVoucherId, setOperatingVoucherId] = useState<string | null>(null);
   const [operationType, setOperationType] = useState<string | null>(null);
   const [redeemAmount, setRedeemAmount] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [newExpiryDate, setNewExpiryDate] = useState('');
-  
+
   // Copy state
   const [copied, setCopied] = useState(false);
   
+  // Separate minting error from critical errors
+  const [mintingError, setMintingError] = useState<string | null>(null);
+
   // Vouchers pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10); // Manually control items per page
@@ -112,6 +126,55 @@ export default function VoucherCollectionDetailPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  const handleRecipientEmailChange = (email: string) => {
+    setMintData({ ...mintData, recipient: email });
+
+    // Clear previous wallet address immediately
+    setRecipientWalletAddress(null);
+
+    // Clear any existing timeout
+    if (window.emailCheckTimeout) {
+      clearTimeout(window.emailCheckTimeout);
+    }
+
+
+
+    // Set new timeout for email check (500ms delay)
+    window.emailCheckTimeout = setTimeout(async () => {
+      if (email.trim()) {
+        setIsCheckingEmail(true);
+        try {
+          const userResult = await getUserByEmail(email.trim());
+          if (userResult.success && userResult.user) {
+            setRecipientWalletAddress(userResult.user.walletAddress);
+          } else {
+            setRecipientWalletAddress(null);
+          }
+        } catch (error) {
+          console.error('Error looking up user:', error);
+          setRecipientWalletAddress(null);
+        } finally {
+          setIsCheckingEmail(false);
+        }
+      } else {
+        setRecipientWalletAddress(null);
+        setIsCheckingEmail(false);
+      }
+    }, 500);
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setUploadedImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setUploadedImage(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   useEffect(() => {
@@ -135,47 +198,144 @@ export default function VoucherCollectionDetailPage() {
     load();
   }, [user?.wallet?.address, collectionPublicKey]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (window.emailCheckTimeout) {
+        clearTimeout(window.emailCheckTimeout);
+      }
+    };
+  }, []);
+
   const handleMintVoucher = async () => {
-    if (!user?.wallet?.address || !collection) return;
-    
+    if (!user?.wallet?.address || !collection || !recipientWalletAddress) return;
+
+    // Clear any previous minting errors when starting
+    setMintingError(null);
     setIsMinting(true);
     try {
-      const result = await mintVoucher({
+      // Always use form data since we always upload custom image
+        const voucherName = collection.collectionName || 'Voucher';
+      const description = `Voucher from ${collection.collectionName}`;
+      const merchantId = user.wallet.address; // Use creator's address as merchant ID
+
+      let voucherMetadataUri: string | null = null;
+
+      // Always generate metadata for vouchers using uploaded image
+      try {
+        // Always upload custom image to IPFS
+        const imageUri = await generateImageUri(uploadedImageFile!);
+
+        // Generate voucher metadata
+        const metadata = {
+          name: voucherName,
+          symbol: 'VERXIO-VOUCHER',
+          description: description,
+          image: imageUri,
+          properties: {
+            files: [
+              {
+                uri: imageUri,
+                type: 'image/png',
+              },
+            ],
+            category: 'image',
+            creators: [
+              {
+                address: user.wallet.address,
+                share: 100,
+              },
+            ],
+          },
+          attributes: [
+            {
+              trait_type: 'Voucher Type',
+              value: mintData.voucherType,
+            },
+            {
+              trait_type: 'Max Uses',
+              value: mintData.maxUses.toString(),
+            },
+            {
+              trait_type: 'Expiry Date',
+              value: new Date(mintData.expiryDate).toISOString(),
+            },
+            {
+              trait_type: 'Merchant ID',
+              value: merchantId,
+            },
+            {
+              trait_type: 'Status',
+              value: 'Active',
+            },
+            {
+              trait_type: 'conditions',
+              value: formatConditionString(mintData.conditions),
+            },
+            
+          ],
+        };
+
+        // Store metadata to IPFS
+        voucherMetadataUri = await storeMetadata(metadata);
+      } catch (error) {
+        console.error('Error generating voucher metadata:', error);
+        setError('Failed to generate voucher metadata. Please try again.');
+        setIsMinting(false);
+        return;
+      }
+
+      const calculatedExpiryDate = new Date(new Date(mintData.expiryDate).setHours(23, 59, 59, 999) + 24 * 60 * 60 * 1000);
+      const mintVoucherData = {
         collectionId: collection.id,
-        recipient: mintData.recipient,
-        voucherName: mintData.voucherName,
+        recipient: recipientWalletAddress,
+        voucherName,
         voucherType: mintData.voucherType,
-        value: parseFloat(mintData.value),
-        description: mintData.description,
-        expiryDate: new Date(mintData.expiryDate),
+        value: 0, // Value not needed as per agreement
+        description,
+        expiryDate: calculatedExpiryDate,
         maxUses: parseInt(mintData.maxUses),
         transferable: mintData.transferable,
-        merchantId: mintData.merchantId
-      }, user.wallet.address);
+        merchantId,
+        conditions: mintData.conditions ? formatConditionString(mintData.conditions) : '', 
+        voucherMetadataUri
+      };
 
+      // console.log('Full mint voucher data:', mintVoucherData);
+      const result = await mintVoucher(mintVoucherData, user.wallet.address);
       if (result.success) {
         // Refresh collection data
         const res = await getVoucherCollectionByPublicKey(collectionPublicKey, user.wallet.address);
         if (res.success && res.collection) {
           setCollection(res.collection as VoucherCollection);
         }
+        // Close form and reset on success
         setShowMintForm(false);
+        setUploadedImage(null);
+        setUploadedImageFile(null);
+        setRecipientWalletAddress(null);
         setMintData({
           recipient: '',
-          voucherName: '',
           voucherType: 'PERCENTAGE_OFF',
           value: '',
-          description: '',
           expiryDate: '',
-          maxUses: '',
+          maxUses: '1',
           transferable: true,
-          merchantId: ''
+          conditions: ''
         });
       } else {
-        setError(result.error || 'Failed to mint voucher');
+        // On failure, just refresh stats but keep form open
+        const res = await getVoucherCollectionByPublicKey(collectionPublicKey, user.wallet.address);
+        if (res.success && res.collection) {
+          setCollection(res.collection as VoucherCollection);
+        }
+        setMintingError(result.error || 'Failed to mint voucher');
+        // Keep form open, keep uploaded image, keep all form data for retry
       }
-    } catch (error) {
-      setError('Failed to mint voucher');
+    } catch (error: any) {
+      console.error('Voucher minting error:', error);
+      setMintingError(error.message || 'Failed to mint voucher. Please try again.');
+      // Keep form open for user to retry
     } finally {
       setIsMinting(false);
     }
@@ -183,7 +343,7 @@ export default function VoucherCollectionDetailPage() {
 
   const handleValidateVoucher = async (voucherId: string) => {
     if (!user?.wallet?.address) return;
-    
+
     setOperatingVoucherId(voucherId);
     setOperationType('validate');
     try {
@@ -203,7 +363,7 @@ export default function VoucherCollectionDetailPage() {
 
   const handleRedeemVoucher = async (voucherId: string) => {
     if (!user?.wallet?.address || !redeemAmount) return;
-    
+
     setOperatingVoucherId(voucherId);
     setOperationType('redeem');
     try {
@@ -228,7 +388,7 @@ export default function VoucherCollectionDetailPage() {
 
   const handleCancelVoucher = async (voucherId: string) => {
     if (!user?.wallet?.address || !cancelReason) return;
-    
+
     setOperatingVoucherId(voucherId);
     setOperationType('cancel');
     try {
@@ -253,7 +413,7 @@ export default function VoucherCollectionDetailPage() {
 
   const handleExtendExpiry = async (voucherId: string) => {
     if (!user?.wallet?.address || !newExpiryDate) return;
-    
+
     setOperatingVoucherId(voucherId);
     setOperationType('extend');
     try {
@@ -306,7 +466,7 @@ export default function VoucherCollectionDetailPage() {
     );
   }
 
-  if (error || !collection) {
+  if ((error && !mintingError) || !collection) {
     return (
       <AppLayout currentPage="dashboard">
         <div className="max-w-md mx-auto space-y-6">
@@ -360,7 +520,7 @@ export default function VoucherCollectionDetailPage() {
             </div>
             <div className="text-sm font-medium text-white">Active Vouchers</div>
             <div className="text-xl font-bold text-blue-400">
-              {collection.vouchers.filter(v => v.status === 'ACTIVE').length}
+              {collection.vouchers.length}
             </div>
           </div>
         </div>
@@ -383,7 +543,7 @@ export default function VoucherCollectionDetailPage() {
                 />
               </div>
             )}
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-zinc-400 text-sm mb-1">Voucher Name</p>
@@ -417,7 +577,7 @@ export default function VoucherCollectionDetailPage() {
                       await navigator.clipboard.writeText(collection.collectionPublicKey);
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1500);
-                    } catch {}
+                    } catch { }
                   }}
                   variant="secondary"
                   className="text-xs px-2 py-1"
@@ -452,7 +612,10 @@ export default function VoucherCollectionDetailPage() {
           <CardContent>
             {!showMintForm ? (
               <AppButton
-                onClick={() => setShowMintForm(true)}
+                onClick={() => {
+                  setShowMintForm(true);
+                  setMintingError(null); // Clear minting errors when opening form
+                }}
                 className="w-full"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -460,52 +623,82 @@ export default function VoucherCollectionDetailPage() {
               </AppButton>
             ) : (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-white text-sm mb-1 block">Recipient Address</Label>
-                    <Input
-                      value={mintData.recipient}
-                      onChange={(e) => setMintData({ ...mintData, recipient: e.target.value })}
-                      placeholder="Wallet address"
-                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Recipient Email</Label>
+                  <Input
+                    type="email"
+                    value={mintData.recipient}
+                    onChange={(e) => handleRecipientEmailChange(e.target.value)}
+                    placeholder="Enter verxio email address"
+                    className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                  />
+                  {isCheckingEmail && (
+                    <div className="text-xs text-blue-400 mt-1 flex items-center gap-1">
+                      <div className="w-3 h-3 border border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
+                      Verifying user record...
+                    </div>
+                  )}
+                  {!isCheckingEmail && recipientWalletAddress && (
+                    <div className="text-xs text-green-400 mt-1">
+                      ✓ User found: {recipientWalletAddress.slice(0, 6)}...{recipientWalletAddress.slice(-6)}
+                    </div>
+                  )}
+                  {!isCheckingEmail && mintData.recipient && !recipientWalletAddress && (
+                    <div className="text-xs text-red-400 mt-1">
+                      ✗ User not found with this email
+                    </div>
+                  )}
+                </div>
+
+                {/* Voucher Image Upload */}
+                <div className="space-y-2">
+                  <Label className="text-white text-sm">Upload Voucher Image</Label>
+                  <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center hover:border-white/30 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      id="voucher-image-upload"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-white text-sm mb-1 block">Voucher Name</Label>
-                    <Input
-                      value={mintData.voucherName}
-                      onChange={(e) => setMintData({ ...mintData, voucherName: e.target.value })}
-                      placeholder="e.g., 10% Off"
-                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
-                    />
+                    <label htmlFor="voucher-image-upload" className="cursor-pointer">
+                      {uploadedImage ? (
+                        <div className="space-y-2">
+                          <div className="w-full h-32 overflow-hidden rounded-lg relative">
+                            <img
+                              src={uploadedImage}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <p className="text-white/60 text-sm text-center">Click to change image</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Upload className="w-6 h-6 text-white/60 mx-auto" />
+                          <p className="text-white/60 text-sm">Click to upload image</p>
+                          <p className="text-white/40 text-xs">Recommended size: 500x500px</p>
+                        </div>
+                      )}
+                    </label>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-white text-sm mb-1 block">Voucher Type</Label>
-                    <CustomSelect
-                      value={mintData.voucherType}
-                      onChange={(value: string) => setMintData({ ...mintData, voucherType: value as any })}
-                      options={[
-                        { value: 'PERCENTAGE_OFF', label: 'Percentage Off' },
-                        { value: 'FIXED_VERXIO_CREDITS', label: 'Fixed Verxio Credits' },
+
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Voucher Type</Label>
+                  <CustomSelect
+                    value={mintData.voucherType}
+                    onChange={(value: string) => setMintData({ ...mintData, voucherType: value as any })}
+                    options={collection?.blockchainDetails?.metadata?.voucherTypes?.map((type: string) => ({
+                      value: type.toUpperCase().replace(' ', '_'),
+                      label: type
+                    })) || [
                         { value: 'FREE_ITEM', label: 'Free Item' },
                         { value: 'BUY_ONE_GET_ONE', label: 'Buy One Get One' },
                         { value: 'CUSTOM_REWARD', label: 'Custom Reward' }
                       ]}
-                      className="bg-black/20 border-white/20 text-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-white text-sm mb-1 block">Value</Label>
-                    <Input
-                      type="number"
-                      value={mintData.value}
-                      onChange={(e) => setMintData({ ...mintData, value: e.target.value })}
-                      placeholder="10"
-                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
-                    />
-                  </div>
+                    className="bg-black/20 border-white/20 text-white text-sm"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -515,13 +708,14 @@ export default function VoucherCollectionDetailPage() {
                       value={mintData.maxUses}
                       onChange={(e) => setMintData({ ...mintData, maxUses: e.target.value })}
                       placeholder="1"
+                      min="1"
                       className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                     />
                   </div>
                   <div>
                     <Label className="text-white text-sm mb-1 block">Expiry Date</Label>
                     <Input
-                      type="datetime-local"
+                      type="date"
                       value={mintData.expiryDate}
                       onChange={(e) => setMintData({ ...mintData, expiryDate: e.target.value })}
                       className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
@@ -529,22 +723,26 @@ export default function VoucherCollectionDetailPage() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-white text-sm mb-1 block">Description</Label>
-                  <Input
-                    value={mintData.description}
-                    onChange={(e) => setMintData({ ...mintData, description: e.target.value })}
-                    placeholder="Voucher description"
-                    className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                  <Label className="text-white text-sm mb-1 block">Conditions (Optional)</Label>
+                  <CustomSelect
+                    value={mintData.conditions}
+                    onChange={(value: string) => setMintData({ ...mintData, conditions: value })}
+                    options={[
+                      { value: '', label: 'No conditions' },
+                      { value: 'minimum_purchase_10', label: 'Minimum purchase $10' },
+                      { value: 'minimum_purchase_25', label: 'Minimum purchase $25' },
+                      { value: 'minimum_purchase_50', label: 'Minimum purchase $50' },
+                      { value: 'weekdays_only', label: 'Valid weekdays only' },
+                      { value: 'weekends_only', label: 'Valid weekends only' },
+                      { value: 'first_time_customer', label: 'First-time customers only' },
+                      { value: 'new_customer', label: 'New customers only' },
+                      { value: 'loyalty_member', label: 'Loyalty members only' }
+                    ]}
+                    className="bg-black/20 border-white/20 text-white text-sm"
                   />
-                </div>
-                <div>
-                  <Label className="text-white text-sm mb-1 block">Merchant ID</Label>
-                  <Input
-                    value={mintData.merchantId}
-                    onChange={(e) => setMintData({ ...mintData, merchantId: e.target.value })}
-                    placeholder="merchant_123"
-                    className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
-                  />
+                  <div className="text-xs text-white/60 mt-1">
+                    Select a condition for voucher redemption
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <AppButton
@@ -556,7 +754,7 @@ export default function VoucherCollectionDetailPage() {
                   </AppButton>
                   <AppButton
                     onClick={handleMintVoucher}
-                    disabled={isMinting || !mintData.recipient || !mintData.voucherName || !mintData.value || !mintData.expiryDate || !mintData.merchantId}
+                    disabled={isMinting || !recipientWalletAddress || !mintData.expiryDate || !uploadedImageFile}
                     className="flex-1"
                   >
                     {isMinting ? (
@@ -569,6 +767,16 @@ export default function VoucherCollectionDetailPage() {
                     )}
                   </AppButton>
                 </div>
+                
+                {/* Minting Error Display */}
+                {mintingError && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <X className="w-4 h-4" />
+                      <span className="text-sm font-medium">{mintingError}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -596,112 +804,103 @@ export default function VoucherCollectionDetailPage() {
               <>
                 <div className="space-y-3">
                   {currentVouchers.map((voucher) => (
-                  <div key={voucher.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className={`${getStatusColor(voucher.status)}`}>
-                          {getStatusIcon(voucher.status)}
+                    <div key={voucher.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="text-blue-400">
+                            <Gift className="w-4 h-4" />
+                          </div>
+                          <span className="text-white font-medium">Voucher #{voucher.id.slice(-6)}</span>
                         </div>
-                        <span className="text-white font-medium">{voucher.voucherName}</span>
+                        <div className="text-xs font-medium text-blue-400">
+                          Loading...
+                        </div>
                       </div>
-                      <div className={`text-xs font-medium ${getStatusColor(voucher.status)}`}>
-                        {voucher.status}
+
+                      <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
+                        <div>Type: Loading...</div>
+                        <div>Value: Loading...</div>
+                        <div>Uses: Loading...</div>
+                        <div>Expires: Loading...</div>
+                      </div>
+
+                      <div className="text-xs text-white/40 mb-3">
+                        Recipient: {voucher.recipient.slice(0, 6)}...{voucher.recipient.slice(-6)}
+                      </div>
+
+
+                      {/* Voucher Operations */}
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleValidateVoucher(voucher.id)}
+                          disabled={operatingVoucherId === voucher.id && operationType === 'validate'}
+                          className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 rounded text-blue-400 text-xs disabled:opacity-50"
+                        >
+                          {operatingVoucherId === voucher.id && operationType === 'validate' ? (
+                            <VerxioLoaderWhiteSmall size="sm" />
+                          ) : (
+                            'Validate'
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            const amount = prompt('Enter redemption amount:');
+                            if (amount) {
+                              setRedeemAmount(amount);
+                              handleRedeemVoucher(voucher.id);
+                            }
+                          }}
+                          disabled={operatingVoucherId === voucher.id && operationType === 'redeem'}
+                          className="px-3 py-1 bg-green-600/20 hover:bg-green-600/30 border border-green-600/30 rounded text-green-400 text-xs disabled:opacity-50"
+                        >
+                          {operatingVoucherId === voucher.id && operationType === 'redeem' ? (
+                            <VerxioLoaderWhiteSmall size="sm" />
+                          ) : (
+                            'Redeem'
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            const reason = prompt('Enter cancellation reason:');
+                            if (reason) {
+                              setCancelReason(reason);
+                              handleCancelVoucher(voucher.id);
+                            }
+                          }}
+                          disabled={operatingVoucherId === voucher.id && operationType === 'cancel'}
+                          className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 rounded text-red-400 text-xs disabled:opacity-50"
+                        >
+                          {operatingVoucherId === voucher.id && operationType === 'cancel' ? (
+                            <VerxioLoaderWhiteSmall size="sm" />
+                          ) : (
+                            'Cancel'
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            const newDate = prompt('Enter new expiry date (YYYY-MM-DD):');
+                            if (newDate) {
+                              setNewExpiryDate(newDate);
+                              handleExtendExpiry(voucher.id);
+                            }
+                          }}
+                          disabled={operatingVoucherId === voucher.id && operationType === 'extend'}
+                          className="px-3 py-1 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 rounded text-orange-400 text-xs disabled:opacity-50"
+                        >
+                          {operatingVoucherId === voucher.id && operationType === 'extend' ? (
+                            <VerxioLoaderWhiteSmall size="sm" />
+                          ) : (
+                            'Extend'
+                          )}
+                        </button>
                       </div>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
-                      <div>Type: {voucher.voucherType.replace('_', ' ')}</div>
-                      <div>Value: {voucher.value}</div>
-                      <div>Uses: {voucher.currentUses}/{voucher.maxUses}</div>
-                      <div>Expires: {new Date(voucher.expiryDate).toLocaleDateString()}</div>
-                    </div>
-                    
-                    <div className="text-xs text-white/40 mb-3">
-                      Recipient: {voucher.recipient.slice(0, 6)}...{voucher.recipient.slice(-6)}
-                    </div>
-                    
-                    {voucher.description && (
-                      <div className="text-xs text-white/60 mb-3">
-                        {voucher.description}
-                      </div>
-                    )}
-                    
-                    {/* Voucher Operations */}
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => handleValidateVoucher(voucher.id)}
-                        disabled={operatingVoucherId === voucher.id && operationType === 'validate'}
-                        className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 rounded text-blue-400 text-xs disabled:opacity-50"
-                      >
-                        {operatingVoucherId === voucher.id && operationType === 'validate' ? (
-                          <VerxioLoaderWhiteSmall size="sm" />
-                        ) : (
-                          'Validate'
-                        )}
-                      </button>
-                      
-                      {voucher.status === 'ACTIVE' && (
-                        <>
-                          <button
-                            onClick={() => {
-                              const amount = prompt('Enter redemption amount:');
-                              if (amount) {
-                                setRedeemAmount(amount);
-                                handleRedeemVoucher(voucher.id);
-                              }
-                            }}
-                            disabled={operatingVoucherId === voucher.id && operationType === 'redeem'}
-                            className="px-3 py-1 bg-green-600/20 hover:bg-green-600/30 border border-green-600/30 rounded text-green-400 text-xs disabled:opacity-50"
-                          >
-                            {operatingVoucherId === voucher.id && operationType === 'redeem' ? (
-                              <VerxioLoaderWhiteSmall size="sm" />
-                            ) : (
-                              'Redeem'
-                            )}
-                          </button>
-                          
-                          <button
-                            onClick={() => {
-                              const reason = prompt('Enter cancellation reason:');
-                              if (reason) {
-                                setCancelReason(reason);
-                                handleCancelVoucher(voucher.id);
-                              }
-                            }}
-                            disabled={operatingVoucherId === voucher.id && operationType === 'cancel'}
-                            className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 rounded text-red-400 text-xs disabled:opacity-50"
-                          >
-                            {operatingVoucherId === voucher.id && operationType === 'cancel' ? (
-                              <VerxioLoaderWhiteSmall size="sm" />
-                            ) : (
-                              'Cancel'
-                            )}
-                          </button>
-                          
-                          <button
-                            onClick={() => {
-                              const newDate = prompt('Enter new expiry date (YYYY-MM-DD):');
-                              if (newDate) {
-                                setNewExpiryDate(newDate);
-                                handleExtendExpiry(voucher.id);
-                              }
-                            }}
-                            disabled={operatingVoucherId === voucher.id && operationType === 'extend'}
-                            className="px-3 py-1 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 rounded text-orange-400 text-xs disabled:opacity-50"
-                          >
-                            {operatingVoucherId === voucher.id && operationType === 'extend' ? (
-                              <VerxioLoaderWhiteSmall size="sm" />
-                            ) : (
-                              'Extend'
-                            )}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
                   ))}
                 </div>
-                
+
                 {/* Pagination */}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/10">
@@ -719,11 +918,10 @@ export default function VoucherCollectionDetailPage() {
                           <button
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-2 text-xs rounded-lg ${
-                              currentPage === pageNum
+                            className={`px-3 py-2 text-xs rounded-lg ${currentPage === pageNum
                                 ? 'bg-blue-600 text-white'
                                 : 'border border-white/20 hover:bg-white/10 text-white'
-                            }`}
+                              }`}
                           >
                             {pageNum}
                           </button>
@@ -734,11 +932,10 @@ export default function VoucherCollectionDetailPage() {
                           <span className="text-white/60">...</span>
                           <button
                             onClick={() => handlePageChange(totalPages)}
-                            className={`px-3 py-2 text-xs rounded-lg ${
-                              currentPage === totalPages
+                            className={`px-3 py-2 text-xs rounded-lg ${currentPage === totalPages
                                 ? 'bg-blue-600 text-white'
                                 : 'border border-white/20 hover:bg-white/10 text-white'
-                            }`}
+                              }`}
                           >
                             {totalPages}
                           </button>
