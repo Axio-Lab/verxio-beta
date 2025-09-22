@@ -84,6 +84,10 @@ export default function Dashboard() {
     router.push('/manage/product');
   };
 
+  const handleVoucherManagement = () => {
+    router.push('/manage/voucher');
+  };
+
   const handleSendTokens = () => {
     router.push('/send');
   };
@@ -306,10 +310,10 @@ export default function Dashboard() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <button 
-                  onClick={handleCreateVoucher}
+                  onClick={handleVoucherManagement}
                   className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg hover:border-white/25 hover:bg-white/10 text-left transition-all duration-300 hover:scale-105 backdrop-blur-sm group"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-orange-600 to-orange-800 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200 shadow-lg">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200 shadow-lg">
                     <Gift className="w-5 h-5 text-white" />
                   </div>
                   <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Loyalty Voucher</div>

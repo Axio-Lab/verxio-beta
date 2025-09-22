@@ -24,7 +24,7 @@ export default function LoyaltyPage() {
   if (isLoading) {
     return (
       <AppLayout currentPage="create">
-        <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)]">
+        <div className="w-full flex items-center justify-center min-h-[calc(100vh-200px)] pt-8 pb-8">
           <VerxioLoaderWhite size="md" />
         </div>
       </AppLayout>

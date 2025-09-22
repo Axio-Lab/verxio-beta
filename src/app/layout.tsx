@@ -12,8 +12,8 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Verxio Checkout",
-  description: "Verxio's loyalty native checkout experience",
+  title: "Verxio Protocol",
+  description: "Enabling businesses and brands to add loyalty rewards to their customer experiences",
 };
 
 export default function RootLayout({
