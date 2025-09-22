@@ -12,8 +12,10 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useSolanaWallets, useSendTransaction } from '@privy-io/react-auth/solana';
 import { Tiles } from '@/components/layout/backgroundTiles';
 import Image from 'next/image';
-import { Transaction, Connection } from '@solana/web3.js';
+import { Transaction, Connection, VersionedTransaction, PublicKey } from '@solana/web3.js';
 import { toast, ToastContainer } from 'react-toastify';
+import { sponsorProductTransaction } from '@/app/actions/product';
+import { getUserStats } from '@/app/actions/stats';
 import 'react-toastify/dist/ReactToastify.css';
 
 export default function ProductPage() {
@@ -31,6 +33,9 @@ export default function ProductPage() {
   const [purchased, setPurchased] = useState(false);
   const [transactionStatus, setTransactionStatus] = useState<'idle' | 'pending' | 'success' | 'failed'>('idle');
   const [transactionSignature, setTransactionSignature] = useState<string>('');
+  const [isSponsored, setIsSponsored] = useState<boolean>(false);
+  const [userBalance, setUserBalance] = useState<string>('0.00');
+  const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(true);
 
   useEffect(() => {
     const load = async () => {
@@ -45,6 +50,30 @@ export default function ProductPage() {
     };
     load();
   }, [productId]);
+
+  // Fetch user balance when user connects wallet
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!user?.wallet?.address) return;
+
+      try {
+        setIsLoadingBalance(true);
+        const result = await getUserStats(user.wallet.address);
+        
+        if (result.success && result.stats) {
+          setUserBalance(result.stats.usdcBalance);
+        }
+      } catch (error) {
+        console.error('Error fetching user balance:', error);
+      } finally {
+        setIsLoadingBalance(false);
+      }
+    };
+
+    if (authenticated && user?.wallet?.address) {
+      fetchBalance();
+    }
+  }, [authenticated, user?.wallet?.address]);
 
   const handlePurchase = async () => {
     if (!user?.wallet?.address) {
@@ -90,26 +119,66 @@ export default function ProductPage() {
         throw new Error(buildResult.error || 'Failed to build transaction');
       }
 
-      const { transaction: serializedTx, connection: connectionConfig } = buildResult;
+      const { transaction: serializedTx, connection: connectionConfig, sponsored } = buildResult;
+      setIsSponsored(sponsored || false);
+      let result;
 
-      // Sign and send transaction using Privy Solana wallet
-      const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
+      if (sponsored) {
+        // For sponsored transactions, user signs their part, then backend adds fee payer signature
+        const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
 
-      if (!wallets || wallets.length === 0) {
-        throw new Error('No Solana wallets available');
+        if (!wallets || wallets.length === 0) {
+          throw new Error('No Solana wallets available');
+        }
+
+        // For sponsored transactions, we need to sign the message, not the full transaction
+        // First, convert to VersionedTransaction and get the message
+        const versionedTransaction = new VersionedTransaction(transaction.compileMessage());
+        
+        // Serialize the message for signing
+        const serializedMessage = Buffer.from(versionedTransaction.message.serialize());
+        
+        // Sign the message with the user's wallet
+        const { signMessage } = wallets[0];
+        const serializedUserSignature = await signMessage(serializedMessage);
+        
+        // Add user signature to transaction
+        versionedTransaction.addSignature(new PublicKey(wallets[0].address), serializedUserSignature);
+        
+        // Serialize the partially signed transaction
+        const serializedUserSignedTx = Buffer.from(versionedTransaction.serialize()).toString('base64');
+
+        // Send to backend for fee payer signature and broadcasting
+        const sponsorResult = await sponsorProductTransaction({
+          transaction: serializedUserSignedTx
+        });
+
+        if (!sponsorResult.success) {
+          throw new Error(sponsorResult.error || 'Failed to sponsor transaction');
+        }
+
+        result = { signature: sponsorResult.signature || '' };
+      } else {
+        // Regular transaction: User pays fees
+        const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
+
+        if (!wallets || wallets.length === 0) {
+          throw new Error('No Solana wallets available');
+        }
+
+        result = await sendTransaction({
+          transaction: transaction,
+          connection: new Connection(connectionConfig.endpoint, 'confirmed'),
+          address: wallets[0].address
+        });
       }
-
-      const result = await sendTransaction({
-        transaction: transaction,
-        connection: new Connection(connectionConfig.endpoint, 'confirmed'),
-        address: wallets[0].address
-      });
 
       // Update product after successful payment
       const res = await purchaseProduct({
         productId,
         buyerAddress: user.wallet.address,
-        quantity: parseInt(quantity)
+        quantity: parseInt(quantity),
+        transactionSignature: result.signature
       });
 
       if (res.success) {
@@ -333,7 +402,13 @@ export default function ProductPage() {
                     </div>
                     <div className="flex justify-between text-sm pt-2 border-t border-white/10">
                       <span className="text-zinc-400 font-medium">Total:</span>
-                      <span className="text-white font-bold">${((product.amount * parseInt(quantity || '1')) + (product.amount * parseInt(quantity || '1') * 0.005)).toFixed(4)} USDC</span>
+                      <span className="text-white font-bold">
+                        {(() => {
+                          const subtotal = product.amount * parseInt(quantity || '1');
+                          const platformFee = Math.min(subtotal * 0.005, 5);
+                          return `$${(subtotal + platformFee).toFixed(4)} USDC`;
+                        })()}
+                      </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-zinc-400">Points Awarded:</span>
@@ -348,13 +423,15 @@ export default function ProductPage() {
                   {authenticated ? (
                     <button
                       onClick={handlePurchase}
-                      disabled={!quantity || parseInt(quantity) <= 0 || product.status !== 'ACTIVE' || purchasing}
+                      disabled={!quantity || parseInt(quantity) <= 0 || product.status !== 'ACTIVE' || purchasing || isLoadingBalance || parseFloat(userBalance) < (product.amount * parseInt(quantity) + Math.min(product.amount * parseInt(quantity) * 0.005, 5))}
                       className="w-full py-3 rounded-lg bg-gradient-to-r from-[#00adef] to-[#056f96] hover:from-[#0098d1] hover:to-[#0088c1] text-white disabled:opacity-50"
                     >
                       <div className="flex items-center gap-2 justify-center text-sm">
                         {purchasing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
                         <span>
                           {purchasing ? 'Processing Payment...' : 
+                           isLoadingBalance ? 'Checking Balance...' :
+                           parseFloat(userBalance) < (product.amount * parseInt(quantity) + Math.min(product.amount * parseInt(quantity) * 0.005, 5)) ? 'Insufficient Balance' :
                            product.status !== 'ACTIVE' ? 'Product not available' : 
                            'Pay with USDC'}
                         </span>

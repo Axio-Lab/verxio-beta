@@ -13,8 +13,8 @@ import { Switch } from '@/components/ui/switch';
 import { toast, ToastContainer } from 'react-toastify';
 import { usePrivy } from '@privy-io/react-auth';
 import { useSolanaWallets, useSendTransaction } from '@privy-io/react-auth/solana';
-import { sendTokens } from '@/app/actions/send';
-import { Transaction, Connection } from '@solana/web3.js';
+import { sendTokens, sponsorTransferTransaction } from '@/app/actions/send';
+import { Transaction, Connection, VersionedTransaction, PublicKey } from '@solana/web3.js';
 import { updateTransferStatus } from '@/app/actions/send';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -27,6 +27,8 @@ export default function SendPage() {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isSponsored, setIsSponsored] = useState<boolean>(false);
+  const [sendStep, setSendStep] = useState<string>('');
 
   const handleSend = async () => {
     if (!recipient.trim() || !amount.trim()) {
@@ -59,6 +61,7 @@ export default function SendPage() {
       if (result.success && result.recipientWalletAddress) {
         try {
           // Build the transfer transaction using server action
+          setSendStep("Initializing transfer...");
           const { buildPaymentTransaction } = await import('@/app/actions/payment');
           const buildResult = await buildPaymentTransaction({
             reference: `transfer_${result.transferId}`,
@@ -71,21 +74,63 @@ export default function SendPage() {
             throw new Error(buildResult.error || 'Failed to build transaction');
           }
 
-          // Deserialize the transaction
-          const transaction = Transaction.from(Buffer.from(buildResult.transaction, 'base64'));
+          const { transaction: serializedTx, connection: connectionConfig, sponsored } = buildResult;
+          setIsSponsored(sponsored || false);
+          let txResult;
 
-          // Sign and send transaction using Privy Solana wallet
-          if (!wallets || wallets.length === 0) {
-            throw new Error('No Solana wallets available');
+          if (sponsored) {
+            // For sponsored transactions, user signs their part, then backend adds fee payer signature
+            setSendStep("Signing transaction...");
+            const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
+
+            if (!wallets || wallets.length === 0) {
+              throw new Error('No Solana wallets available');
+            }
+
+            // For sponsored transactions, we need to sign the message, not the full transaction
+            const versionedTransaction = new VersionedTransaction(transaction.compileMessage());
+            
+            // Serialize the message for signing
+            const serializedMessage = Buffer.from(versionedTransaction.message.serialize());
+            
+            // Sign the message with the user's wallet
+            const { signMessage } = wallets[0];
+            const serializedUserSignature = await signMessage(serializedMessage);
+            
+            // Add user signature to transaction
+            versionedTransaction.addSignature(new PublicKey(wallets[0].address), serializedUserSignature);
+            
+            // Serialize the partially signed transaction
+            const serializedUserSignedTx = Buffer.from(versionedTransaction.serialize()).toString('base64');
+            const sponsorResult = await sponsorTransferTransaction({
+              transaction: serializedUserSignedTx,
+              transferId: result.transferId
+            });
+
+            if (!sponsorResult.success) {
+              throw new Error(sponsorResult.error || 'Failed to sponsor transaction');
+            }
+
+            txResult = { signature: sponsorResult.signature || '' };
+          } else {
+            // Regular transaction: User pays fees
+            setSendStep("Signing and sending transaction...");
+            const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
+
+            if (!wallets || wallets.length === 0) {
+              throw new Error('No Solana wallets available');
+            }
+
+            txResult = await sendTransaction({
+              transaction: transaction,
+              connection: new Connection(connectionConfig.endpoint, 'confirmed'),
+              address: wallets[0].address
+            });
+
+            await updateTransferStatus(result.transferId, txResult.signature);
           }
 
-          const txResult = await sendTransaction({
-            transaction: transaction,
-            connection: new Connection(buildResult.connection.endpoint, 'confirmed'),
-            address: wallets[0].address
-          });
-
-          await updateTransferStatus(result.transferId, txResult.signature);
+          setSendStep("");
           toast.success(`Transfer successful!`);
 
           // Reset form
@@ -108,6 +153,7 @@ export default function SendPage() {
       toast.error('Failed to send tokens. Please try again.');
     } finally {
       setIsSending(false);
+      setSendStep("");
     }
   };
 
@@ -240,7 +286,7 @@ export default function SendPage() {
                   {isSending ? (
                     <div className="flex items-center gap-2">
                       <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span className="font-medium">Sending...</span>
+                      <span className="font-medium">{sendStep || 'Sending...'}</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
