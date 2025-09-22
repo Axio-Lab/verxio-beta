@@ -936,7 +936,7 @@ export default function VoucherCollectionDetailPage() {
                             disabled={operatingVoucherId === voucher.id}
                             className="px-3 py-1 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 rounded text-orange-400 text-xs disabled:opacity-50"
                           >
-                            Extend
+                            Extend Expiry
                           </button>
                         )}
                       </div>
