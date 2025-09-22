@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { storeMetadata } from '@/app/actions/metadata'
 import { getVoucherCollectionDetails } from '@/lib/voucher/getVoucherCollectionDetails'
 import { mintVoucher } from './voucher'
+import { getUserVerxioCreditBalance, awardOrRevokeLoyaltyPoints } from './verxio-credit'
 
 export interface CreateRewardLinkData {
   creatorAddress: string
@@ -36,6 +37,15 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
       imageUri,
       metadataUri
     } = data
+
+    // Check if user has sufficient Verxio credits (minimum 1000 required for creating reward links)
+    const creditCheck = await getUserVerxioCreditBalance(creatorAddress)
+    if (!creditCheck.success || (creditCheck.balance || 0) < 1000) {
+      return {
+        success: false,
+          error: `Insufficient Verxio credits. You need at least 1000 credits to create reward links.`
+        }
+    }
 
     // Ensure collection exists and belongs to creator
     const collection = await prisma.voucherCollection.findFirst({
@@ -109,6 +119,19 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
         metadataUri: finalMetadataUri || null
       }
     })
+
+    // Deduct 500 Verxio credits for creating reward link
+    const deductionResult = await awardOrRevokeLoyaltyPoints({
+      creatorAddress,
+      points: 500,
+      assetAddress: collection.collectionPublicKey,
+      assetOwner: creatorAddress,
+      action: 'REVOKE'
+    })
+
+    if (!deductionResult.success) {
+      console.error('Failed to deduct Verxio credits:', deductionResult.error)
+    }
 
     return { success: true, reward: created }
   } catch (error: any) {

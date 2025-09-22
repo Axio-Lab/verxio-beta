@@ -458,6 +458,15 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
   try {
     const { collectionId, recipient, voucherName, voucherType, value, description, expiryDate, maxUses, transferable = true, merchantId, voucherMetadataUri } = data
 
+    // Check if user has sufficient Verxio credits (minimum 1000 required for minting vouchers)
+    const creditCheck = await getUserVerxioCreditBalance(creatorAddress)
+    if (!creditCheck.success || (creditCheck.balance || 0) < 1000) {
+      return {
+        success: false,
+        error: `Insufficient Verxio credits. You need at least 1000 credits to mint vouchers`
+      }
+    }
+
     // Get collection and verify ownership
     const collection = await prisma.voucherCollection.findFirst({
       where: {
@@ -533,6 +542,19 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
         worth: value
       }
     })
+
+    // Deduct 500 Verxio credits for voucher minting
+    const deductionResult = await awardOrRevokeLoyaltyPoints({
+      creatorAddress,
+      points: 500,
+      assetAddress: asset.publicKey,
+      assetOwner: recipient,
+      action: 'REVOKE'
+    })
+
+    if (!deductionResult.success) {
+      console.error('Failed to deduct Verxio credits:', deductionResult.error)
+    }
 
     return {
       success: true,
