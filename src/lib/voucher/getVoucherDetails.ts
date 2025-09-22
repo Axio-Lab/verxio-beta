@@ -1,39 +1,47 @@
 import { getVerxioConfig } from '@/app/actions/loyalty';
 
 const { rpcEndpoint } = await getVerxioConfig();
-export interface VoucherCollectionDetails {
+
+export interface VoucherDetails {
   id: string;
   name: string;
   description: string;
   image: string;
   attributes: {
-    merchant: string;
-    collectionType: string;
+    voucherType: string;
+    maxUses: string;
+    expiryDate: string;
+    merchantId: string;
     status: string;
-    voucherTypes: string[];
+    conditions?: string;
   };
   creator: string;
   owner: string;
-  metadata: {
-    merchantName: string;
-    merchantAddress: string;
-    voucherTypes: string[];
-  };
-  voucherStats: {
-    totalVouchersIssued: number;
-    totalVouchersRedeemed: number;
-    totalValueRedeemed: number;
+  collectionId: string;
+  voucherData: {
+    type: string;
+    value: number;
+    status: string;
+    maxUses: number;
+    issuedAt: number;
+    conditions: string[];
+    description: string;
+    expiryDate: number;
+    merchantId: string;
+    currentUses: number;
+    transferable: boolean;
+    redemptionHistory: any[];
   };
 }
 
-export const getVoucherCollectionDetails = async (voucherAddress: string): Promise<{
+export const getVoucherDetails = async (voucherAddress: string): Promise<{
   success: boolean;
-  data?: VoucherCollectionDetails;
+  data?: VoucherDetails;
   error?: string;
 }> => {
   try {
-      const url = rpcEndpoint;
-      const options = {
+    const url = rpcEndpoint;
+    const options = {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -55,61 +63,78 @@ export const getVoucherCollectionDetails = async (voucherAddress: string): Promi
 
     const asset = data.result;
     if (!asset) {
-      return { success: false, error: 'Voucher collection not found' };
+      return { success: false, error: 'Voucher not found' };
     }
 
     // Extract metadata
     const metadata = asset.content?.metadata;
     const attributes = metadata?.attributes || [];
     
-    // Extract attributes
-    const merchantAttr = attributes.find((attr: any) => attr.trait_type === 'Merchant');
-    const collectionTypeAttr = attributes.find((attr: any) => attr.trait_type === 'Collection Type');
+    // Extract attributes from metadata
+    const voucherTypeAttr = attributes.find((attr: any) => attr.trait_type === 'Voucher Type');
+    const maxUsesAttr = attributes.find((attr: any) => attr.trait_type === 'Max Uses');
+    const expiryDateAttr = attributes.find((attr: any) => attr.trait_type === 'Expiry Date');
+    const merchantIdAttr = attributes.find((attr: any) => attr.trait_type === 'Merchant ID');
     const statusAttr = attributes.find((attr: any) => attr.trait_type === 'Status');
-    const voucherTypesAttr = attributes.find((attr: any) => attr.trait_type === 'Voucher Types');
+    const conditionsAttr = attributes.find((attr: any) => attr.trait_type === 'Conditions');
 
-    // Extract plugin data
+    // Extract collection ID from grouping
+    const collectionGrouping = asset.grouping?.find((group: any) => group.group_key === 'collection');
+    const collectionId = collectionGrouping?.group_value || '';
+
+    // Extract voucher data from external plugins
     const externalPlugins = asset.external_plugins || [];
     const appDataPlugin = externalPlugins.find((plugin: any) => plugin.type === 'AppData');
-    const voucherStats = appDataPlugin?.data || {
-      totalVouchersIssued: 0,
-      totalVouchersRedeemed: 0,
-      totalValueRedeemed: 0
+    const voucherData = appDataPlugin?.data || {
+      type: '',
+      value: 0,
+      status: 'active',
+      maxUses: 1,
+      issuedAt: 0,
+      conditions: [],
+      description: '',
+      expiryDate: 0,
+      merchantId: '',
+      currentUses: 0,
+      transferable: true,
+      redemptionHistory: []
     };
 
-    // Extract metadata from plugins
-    const attributesPlugin = asset.plugins?.attributes?.data?.attribute_list || [];
-    const metadataAttr = attributesPlugin.find((attr: any) => attr.key === 'metadata');
-    const parsedMetadata = metadataAttr ? JSON.parse(metadataAttr.value) : {};
-
-    const voucherDetails: VoucherCollectionDetails = {
+    const voucherDetails: VoucherDetails = {
       id: asset.id,
-      name: metadata?.name || 'Unknown Voucher Collection',
+      name: metadata?.name || 'Unknown Voucher',
       description: metadata?.description || '',
       image: asset.content?.links?.image || '',
       attributes: {
-        merchant: merchantAttr?.value || '',
-        collectionType: collectionTypeAttr?.value || '',
-        status: statusAttr?.value || '',
-        voucherTypes: voucherTypesAttr?.value ? voucherTypesAttr.value.split(', ') : []
+        voucherType: voucherTypeAttr?.value || '',
+        maxUses: maxUsesAttr?.value || '1',
+        expiryDate: expiryDateAttr?.value || '',
+        merchantId: merchantIdAttr?.value || '',
+        status: statusAttr?.value || 'Active',
+        conditions: conditionsAttr?.value || ''
       },
       creator: asset.ownership?.owner || '',
       owner: asset.ownership?.owner || '',
-      metadata: {
-        merchantName: parsedMetadata.merchantName || '',
-        merchantAddress: parsedMetadata.merchantAddress || '',
-        voucherTypes: parsedMetadata.voucherTypes || []
-      },
-      voucherStats: {
-        totalVouchersIssued: voucherStats.total_vouchers_issued || 0,
-        totalVouchersRedeemed: voucherStats.total_vouchers_redeemed || 0,
-        totalValueRedeemed: voucherStats.total_value_redeemed || 0
+      collectionId: collectionId,
+      voucherData: {
+        type: voucherData.type || '',
+        value: voucherData.value || 0,
+        status: voucherData.status || 'active',
+        maxUses: voucherData.max_uses || 1,
+        issuedAt: voucherData.issued_at || 0,
+        conditions: voucherData.conditions || [],
+        description: voucherData.description || '',
+        expiryDate: voucherData.expiry_date || 0,
+        merchantId: voucherData.merchant_id || '',
+        currentUses: voucherData.current_uses || 0,
+        transferable: voucherData.transferable || true,
+        redemptionHistory: voucherData.redemption_history || []
       }
     };
 
     return { success: true, data: voucherDetails };
   } catch (error) {
-    console.error('Error fetching voucher collection details:', error);
-    return { success: false, error: 'Failed to fetch voucher collection details' };
+    console.error('Error fetching voucher details:', error);
+    return { success: false, error: 'Failed to fetch voucher details' };
   }
 };

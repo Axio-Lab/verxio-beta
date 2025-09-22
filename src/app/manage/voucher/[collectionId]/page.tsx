@@ -27,7 +27,7 @@ import { VerxioLoaderWhite as VerxioLoaderWhiteSmall } from '@/components/ui/ver
 // Format condition string to proper display format
 const formatConditionString = (condition: string): string => {
   if (!condition) return '';
-  
+
   const conditionMap: { [key: string]: string } = {
     'minimum_purchase_10': 'Minimum purchase $10',
     'minimum_purchase_25': 'Minimum purchase $25',
@@ -38,7 +38,7 @@ const formatConditionString = (condition: string): string => {
     'new_customer': 'New customers only',
     'loyalty_member': 'Loyalty members only'
   };
-  
+
   // Return mapped value or fallback to formatted string
   return conditionMap[condition] || condition.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
@@ -62,6 +62,20 @@ interface VoucherCollection {
     recipient: string;
     signature: string;
     createdAt: string;
+    voucherName: string;
+    voucherType: string;
+    value: number;
+    description: string;
+    expiryDate: string;
+    maxUses: number;
+    currentUses: number;
+    transferable: boolean;
+    status: string;
+    merchantId: string;
+    conditions: string;
+    image: string | null;
+    isExpired: boolean;
+    canRedeem: boolean;
   }>;
 }
 
@@ -107,15 +121,28 @@ export default function VoucherCollectionDetailPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [newExpiryDate, setNewExpiryDate] = useState('');
 
+  // Modal states
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState<'redeem' | 'cancel' | 'extend' | null>(null);
+  const [modalVoucherId, setModalVoucherId] = useState<string | null>(null);
+
+  // Success screen states
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [operationLoading, setOperationLoading] = useState(false);
+
+  // Modal error state
+  const [modalError, setModalError] = useState<string | null>(null);
+
   // Copy state
   const [copied, setCopied] = useState(false);
-  
+
   // Separate minting error from critical errors
   const [mintingError, setMintingError] = useState<string | null>(null);
 
   // Vouchers pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(10); // Manually control items per page
+  const [pageSize] = useState(10); // Max 10 items per page
 
   // Calculate pagination for vouchers
   const totalVouchers = collection?.vouchers.length || 0;
@@ -215,7 +242,7 @@ export default function VoucherCollectionDetailPage() {
     setIsMinting(true);
     try {
       // Always use form data since we always upload custom image
-        const voucherName = collection.collectionName || 'Voucher';
+      const voucherName = collection.collectionName || 'Voucher';
       const description = `Voucher from ${collection.collectionName}`;
       const merchantId = user.wallet.address; // Use creator's address as merchant ID
 
@@ -272,7 +299,7 @@ export default function VoucherCollectionDetailPage() {
               trait_type: 'conditions',
               value: formatConditionString(mintData.conditions),
             },
-            
+
           ],
         };
 
@@ -297,7 +324,7 @@ export default function VoucherCollectionDetailPage() {
         maxUses: parseInt(mintData.maxUses),
         transferable: mintData.transferable,
         merchantId,
-        conditions: mintData.conditions ? formatConditionString(mintData.conditions) : '', 
+        conditions: mintData.conditions ? formatConditionString(mintData.conditions) : '',
         voucherMetadataUri
       };
 
@@ -364,49 +391,73 @@ export default function VoucherCollectionDetailPage() {
   const handleRedeemVoucher = async (voucherId: string) => {
     if (!user?.wallet?.address || !redeemAmount) return;
 
-    setOperatingVoucherId(voucherId);
+    // Clear any previous modal errors when starting the operation
+    setModalError(null);
+    setOperationLoading(true);
     setOperationType('redeem');
     try {
-      const result = await redeemVoucher(voucherId, 'merchant_' + Date.now(), user.wallet.address, parseFloat(redeemAmount));
-      if (result.success) {
+      const result = await redeemVoucher(voucherId, user.wallet.address, user.wallet.address, parseFloat(redeemAmount));
+      if (result.success && 'result' in result && result.result?.success) {
         // Refresh collection data
         const res = await getVoucherCollectionByPublicKey(collectionPublicKey, user.wallet.address);
         if (res.success && res.collection) {
           setCollection(res.collection as VoucherCollection);
         }
+        // Show success screen
+        setSuccessMessage('Voucher redeemed successfully!');
+        setShowSuccessScreen(true);
+        // Close modal and reset state
+        setShowModal(false);
+        setModalType(null);
+        setModalVoucherId(null);
+        setOperatingVoucherId(null);
+        setOperationType(null);
         setRedeemAmount('');
       } else {
-        setError(result.error || 'Failed to redeem voucher');
+        const errorMessage = ('result' in result && result.result?.errors?.[0]) || result.error || 'Failed to redeem voucher';
+        setModalError(errorMessage);
       }
     } catch (error) {
-      setError('Failed to redeem voucher');
+      setModalError('Failed to redeem voucher');
     } finally {
-      setOperatingVoucherId(null);
+      setOperationLoading(false);
       setOperationType(null);
     }
   };
 
   const handleCancelVoucher = async (voucherId: string) => {
-    if (!user?.wallet?.address || !cancelReason) return;
+    if (!user?.wallet?.address) return;
 
-    setOperatingVoucherId(voucherId);
+    // Clear any previous modal errors when starting the operation
+    setModalError(null);
+    setOperationLoading(true);
     setOperationType('cancel');
     try {
       const result = await cancelVoucher(voucherId, cancelReason, user.wallet.address);
-      if (result.success) {
+      if (result.success && 'result' in result && result.result?.success) {
         // Refresh collection data
         const res = await getVoucherCollectionByPublicKey(collectionPublicKey, user.wallet.address);
         if (res.success && res.collection) {
           setCollection(res.collection as VoucherCollection);
         }
+        // Show success screen
+        setSuccessMessage('Voucher cancelled successfully!');
+        setShowSuccessScreen(true);
+        // Close modal and reset state
+        setShowModal(false);
+        setModalType(null);
+        setModalVoucherId(null);
+        setOperatingVoucherId(null);
+        setOperationType(null);
         setCancelReason('');
       } else {
-        setError(result.error || 'Failed to cancel voucher');
+        const errorMessage = ('result' in result && result.result?.errors?.[0]) || result.error || 'Failed to cancel voucher';
+        setModalError(errorMessage);
       }
     } catch (error) {
-      setError('Failed to cancel voucher');
+      setModalError('Failed to cancel voucher');
     } finally {
-      setOperatingVoucherId(null);
+      setOperationLoading(false);
       setOperationType(null);
     }
   };
@@ -414,24 +465,38 @@ export default function VoucherCollectionDetailPage() {
   const handleExtendExpiry = async (voucherId: string) => {
     if (!user?.wallet?.address || !newExpiryDate) return;
 
-    setOperatingVoucherId(voucherId);
+    // Clear any previous modal errors when starting the operation
+    setModalError(null);
+    setOperationLoading(true);
     setOperationType('extend');
     try {
-      const result = await extendVoucherExpiry(voucherId, new Date(newExpiryDate), user.wallet.address);
-      if (result.success) {
+      // Set the expiry date to the end of the selected day to ensure it's in the future
+      const updatedExpiryDate = new Date(new Date(newExpiryDate).setHours(23, 59, 59, 999) + 24 * 60 * 60 * 1000);
+      const result = await extendVoucherExpiry(voucherId, updatedExpiryDate, user.wallet.address);
+      if (result.success && 'result' in result && result.result?.success) {
         // Refresh collection data
         const res = await getVoucherCollectionByPublicKey(collectionPublicKey, user.wallet.address);
         if (res.success && res.collection) {
           setCollection(res.collection as VoucherCollection);
         }
+        // Show success screen
+        setSuccessMessage('Voucher expiry extended successfully!');
+        setShowSuccessScreen(true);
+        // Close modal and reset state
+        setShowModal(false);
+        setModalType(null);
+        setModalVoucherId(null);
+        setOperatingVoucherId(null);
+        setOperationType(null);
         setNewExpiryDate('');
       } else {
-        setError(result.error || 'Failed to extend voucher expiry');
+        const errorMessage = ('result' in result && result.result?.errors?.[0]) || result.error || 'Failed to extend voucher expiry';
+        setModalError(errorMessage);
       }
     } catch (error) {
-      setError('Failed to extend voucher expiry');
+      setModalError('Failed to extend voucher expiry');
     } finally {
-      setOperatingVoucherId(null);
+      setOperationLoading(false);
       setOperationType(null);
     }
   };
@@ -511,7 +576,7 @@ export default function VoucherCollectionDetailPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-green-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
               <Gift className="w-5 h-5 text-white" />
             </div>
-            <div className="text-sm font-medium text-white">Total Vouchers</div>
+            <div className="text-sm font-medium text-white">Total Vouchers Issued</div>
             <div className="text-xl font-bold text-green-400">{collection.vouchers.length}</div>
           </div>
           <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg text-left backdrop-blur-sm">
@@ -520,7 +585,25 @@ export default function VoucherCollectionDetailPage() {
             </div>
             <div className="text-sm font-medium text-white">Active Vouchers</div>
             <div className="text-xl font-bold text-blue-400">
-              {collection.vouchers.length}
+              {collection.vouchers.filter(v => v.status === 'active').length}
+            </div>
+          </div>
+          <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg text-left backdrop-blur-sm">
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
+              <Check className="w-5 h-5 text-white" />
+            </div>
+            <div className="text-sm font-medium text-white">Total Redeemed</div>
+            <div className="text-xl font-bold text-purple-400">
+              {collection.vouchers.filter(v => v.status === 'used').length}
+            </div>
+          </div>
+          <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg text-left backdrop-blur-sm">
+            <div className="w-8 h-8 bg-gradient-to-br from-red-600 to-red-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
+              <X className="w-5 h-5 text-white" />
+            </div>
+            <div className="text-sm font-medium text-white">Total Cancelled</div>
+            <div className="text-xl font-bold text-red-400">
+              {collection.vouchers.filter(v => v.status === 'cancelled').length}
             </div>
           </div>
         </div>
@@ -555,14 +638,6 @@ export default function VoucherCollectionDetailPage() {
                   Active
                 </span>
               </div>
-              <div>
-                <p className="text-zinc-400 text-sm mb-1">Total Vouchers Issued</p>
-                <p className="text-white font-medium">{collection.voucherStats?.totalVouchersIssued || 0}</p>
-              </div>
-              <div>
-                <p className="text-zinc-400 text-sm mb-1">Total Redeemed</p>
-                <p className="text-white font-medium">{collection.voucherStats?.totalVouchersRedeemed || 0}</p>
-              </div>
             </div>
 
             <div>
@@ -571,7 +646,7 @@ export default function VoucherCollectionDetailPage() {
                 <div className="flex-1 text-xs truncate text-white/80 border border-white/10 rounded-md px-3 py-2 bg-white/5">
                   {collection.collectionPublicKey}
                 </div>
-                <AppButton
+                {/* <AppButton
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(collection.collectionPublicKey);
@@ -583,9 +658,9 @@ export default function VoucherCollectionDetailPage() {
                   className="text-xs px-2 py-1"
                 >
                   {copied ? 'Copied!' : <Copy className="w-3 h-3" />}
-                </AppButton>
+                </AppButton> */}
                 <AppButton
-                  onClick={() => window.open(`https://solscan.io/token/${collection.collectionPublicKey}?cluster=devnet`, '_blank')}
+                  onClick={() => window.open(`https://solscan.io/token/${collection.collectionPublicKey}`, '_blank')}
                   variant="secondary"
                   className="text-xs px-2 py-1"
                 >
@@ -767,7 +842,7 @@ export default function VoucherCollectionDetailPage() {
                     )}
                   </AppButton>
                 </div>
-                
+
                 {/* Minting Error Display */}
                 {mintingError && (
                   <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -807,99 +882,121 @@ export default function VoucherCollectionDetailPage() {
                     <div key={voucher.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <div className="text-blue-400">
-                            <Gift className="w-4 h-4" />
-                          </div>
-                          <span className="text-white font-medium">Voucher #{voucher.id.slice(-6)}</span>
+                          <span className="text-white font-medium">{voucher.voucherName}</span>
                         </div>
-                        <div className="text-xs font-medium text-blue-400">
-                          Loading...
+                        <div className={`text-xs font-medium ${getStatusColor(voucher.status)}`}>
+                          {voucher.status.toUpperCase()}
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
-                        <div>Type: Loading...</div>
-                        <div>Value: Loading...</div>
-                        <div>Uses: Loading...</div>
-                        <div>Expires: Loading...</div>
+                        <div>Type: {voucher.voucherType.replace(/_/g, ' ')}</div>
+                        <div>Value: {voucher.value}</div>
+                        <div>Uses: {voucher.currentUses}/{voucher.maxUses}</div>
+                        <div>Expires: {new Date(voucher.expiryDate).toLocaleDateString()}</div>
                       </div>
 
                       <div className="text-xs text-white/40 mb-3">
-                        Recipient: {voucher.recipient.slice(0, 6)}...{voucher.recipient.slice(-6)}
+                        Recipient: {voucher.recipient}
                       </div>
+
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="text-xs text-white/40">Voucher Address:</div>
+                        <div className="flex items-center gap-1">
+                          <div className="text-xs truncate text-white/80 border border-white/10 rounded-md px-2 py-1 bg-white/5 max-w-[120px]">
+                            {voucher.voucherPublicKey.slice(0, 6)}...{voucher.voucherPublicKey.slice(-6)}
+                          </div>
+                          {/* <AppButton
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(voucher.voucherPublicKey);
+                                setCopied(true);
+                                setTimeout(() => setCopied(false), 1500);
+                              } catch { }
+                            }}
+                            variant="secondary"
+                            className="text-xs px-1 py-1"
+                          >
+                            {copied ? '✓' : <Copy className="w-3 h-3" />}
+                          </AppButton> */}
+                          <AppButton
+                            onClick={() => window.open(`https://solscan.io/token/${voucher.voucherPublicKey}?`, '_blank')}
+                            variant="secondary"
+                            className="text-xs px-1 py-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </AppButton>
+                        </div>
+                      </div>
+
+                      {/* {voucher.description && (
+                        <div className="text-xs text-white/60 mb-3">
+                          {voucher.description}
+                        </div>
+                      )} */}
+
+                      {voucher.conditions && (
+                        <div className="text-xs text-white/60 mb-3">
+                          <span className="text-white/40">Conditions: </span>
+                          {voucher.conditions}
+                        </div>
+                      )}
 
 
                       {/* Voucher Operations */}
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => handleValidateVoucher(voucher.id)}
-                          disabled={operatingVoucherId === voucher.id && operationType === 'validate'}
-                          className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 rounded text-blue-400 text-xs disabled:opacity-50"
-                        >
-                          {operatingVoucherId === voucher.id && operationType === 'validate' ? (
-                            <VerxioLoaderWhiteSmall size="sm" />
-                          ) : (
-                            'Validate'
-                          )}
-                        </button>
+                        {voucher.canRedeem && !voucher.isExpired && voucher.status === 'active' && (
+                          <button
+                            onClick={() => {
+                              setModalVoucherId(voucher.id);
+                              setModalType('redeem');
+                              setShowModal(true);
+                              setRedeemAmount('100'); // Set default amount
+                              setModalError(null);
+                            }}
+                            disabled={operatingVoucherId === voucher.id}
+                            className="px-3 py-1 bg-green-600/20 hover:bg-green-600/30 border border-green-600/30 rounded text-green-400 text-xs disabled:opacity-50"
+                          >
+                            Redeem
+                          </button>
+                        )}
 
-                        <button
-                          onClick={() => {
-                            const amount = prompt('Enter redemption amount:');
-                            if (amount) {
-                              setRedeemAmount(amount);
-                              handleRedeemVoucher(voucher.id);
-                            }
-                          }}
-                          disabled={operatingVoucherId === voucher.id && operationType === 'redeem'}
-                          className="px-3 py-1 bg-green-600/20 hover:bg-green-600/30 border border-green-600/30 rounded text-green-400 text-xs disabled:opacity-50"
-                        >
-                          {operatingVoucherId === voucher.id && operationType === 'redeem' ? (
-                            <VerxioLoaderWhiteSmall size="sm" />
-                          ) : (
-                            'Redeem'
-                          )}
-                        </button>
+                        {voucher.status === 'active' && (
+                          <button
+                            onClick={() => {
+                              setModalVoucherId(voucher.id);
+                              setModalType('cancel');
+                              setShowModal(true);
+                              setCancelReason('Voucher cancelled by creator'); // Set default reason
+                              setModalError(null);
+                            }}
+                            disabled={operatingVoucherId === voucher.id}
+                            className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 rounded text-red-400 text-xs disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        )}
 
-                        <button
-                          onClick={() => {
-                            const reason = prompt('Enter cancellation reason:');
-                            if (reason) {
-                              setCancelReason(reason);
-                              handleCancelVoucher(voucher.id);
-                            }
-                          }}
-                          disabled={operatingVoucherId === voucher.id && operationType === 'cancel'}
-                          className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 rounded text-red-400 text-xs disabled:opacity-50"
-                        >
-                          {operatingVoucherId === voucher.id && operationType === 'cancel' ? (
-                            <VerxioLoaderWhiteSmall size="sm" />
-                          ) : (
-                            'Cancel'
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            const newDate = prompt('Enter new expiry date (YYYY-MM-DD):');
-                            if (newDate) {
-                              setNewExpiryDate(newDate);
-                              handleExtendExpiry(voucher.id);
-                            }
-                          }}
-                          disabled={operatingVoucherId === voucher.id && operationType === 'extend'}
-                          className="px-3 py-1 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 rounded text-orange-400 text-xs disabled:opacity-50"
-                        >
-                          {operatingVoucherId === voucher.id && operationType === 'extend' ? (
-                            <VerxioLoaderWhiteSmall size="sm" />
-                          ) : (
-                            'Extend'
-                          )}
-                        </button>
+                        {voucher.status === 'active' && !voucher.isExpired && (
+                          <button
+                            onClick={() => {
+                              setModalVoucherId(voucher.id);
+                              setModalType('extend');
+                              setShowModal(true);
+                              setNewExpiryDate('');
+                              setModalError(null);
+                            }}
+                            disabled={operatingVoucherId === voucher.id}
+                            className="px-3 py-1 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 rounded text-orange-400 text-xs disabled:opacity-50"
+                          >
+                            Extend
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
+
 
                 {/* Pagination */}
                 {totalPages > 1 && (
@@ -919,8 +1016,8 @@ export default function VoucherCollectionDetailPage() {
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
                             className={`px-3 py-2 text-xs rounded-lg ${currentPage === pageNum
-                                ? 'bg-blue-600 text-white'
-                                : 'border border-white/20 hover:bg-white/10 text-white'
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-white/20 hover:bg-white/10 text-white'
                               }`}
                           >
                             {pageNum}
@@ -933,8 +1030,8 @@ export default function VoucherCollectionDetailPage() {
                           <button
                             onClick={() => handlePageChange(totalPages)}
                             className={`px-3 py-2 text-xs rounded-lg ${currentPage === totalPages
-                                ? 'bg-blue-600 text-white'
-                                : 'border border-white/20 hover:bg-white/10 text-white'
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-white/20 hover:bg-white/10 text-white'
                               }`}
                           >
                             {totalPages}
@@ -966,6 +1063,147 @@ export default function VoucherCollectionDetailPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Modal */}
+        {showModal && modalType && modalVoucherId && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold text-lg">
+                  {modalType === 'redeem' && 'Confirm Voucher Redemption'}
+                  {modalType === 'cancel' && 'Confirm Voucher Cancellation'}
+                  {modalType === 'extend' && 'Extend Voucher Expiry'}
+                </h3>
+              </div>
+
+              <div className="space-y-4">
+                {modalType === 'redeem' && (
+                  <>
+                    <div className="text-center">
+                      <div className="text-white/80 mb-4">
+                        You're about to redeem{' '}
+                        <span className="text-green-400 font-medium">
+                          {collection?.vouchers.find(v => v.id === modalVoucherId)?.voucherType?.replace(/_/g, ' ').toLowerCase()}
+                        </span>{' '}
+                        voucher for{' '}
+                        <span className="text-blue-400 font-medium">
+                          {collection?.vouchers.find(v => v.id === modalVoucherId)?.recipient}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {modalType === 'cancel' && (
+                  <>
+                    <div className="text-center">
+                      <div className="text-white/80 mb-4">
+                        You're about to cancel the{' '}
+                        <span className="text-red-400 font-medium">
+                          {collection?.vouchers.find(v => v.id === modalVoucherId)?.voucherType?.replace(/_/g, ' ').toLowerCase()}
+                        </span>{' '}
+                        voucher for{' '}
+                        <span className="text-blue-400 font-medium">
+                          {collection?.vouchers.find(v => v.id === modalVoucherId)?.recipient}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {modalType === 'extend' && (
+                  <>
+                    <div>
+                      <Label className="text-white text-sm mb-2 block">New Expiry Date</Label>
+                      <Input
+                        type="date"
+                        value={newExpiryDate}
+                        onChange={(e) => setNewExpiryDate(e.target.value)}
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Modal Error Display */}
+                {modalError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <X className="w-4 h-4" />
+                      <span className="text-sm font-medium">{modalError}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <AppButton
+                    onClick={() => {
+                      setShowModal(false);
+                      setModalType(null);
+                      setModalVoucherId(null);
+                      setRedeemAmount('');
+                      setCancelReason('');
+                      setNewExpiryDate('');
+                      setModalError(null);
+                    }}
+                    variant="secondary"
+                    className="flex-1"
+                  >
+                    Cancel
+                  </AppButton>
+                  <AppButton
+                    onClick={() => {
+                      if (modalType === 'redeem') {
+                        handleRedeemVoucher(modalVoucherId);
+                      } else if (modalType === 'cancel') {
+                        handleCancelVoucher(modalVoucherId);
+                      } else if (modalType === 'extend') {
+                        handleExtendExpiry(modalVoucherId);
+                      }
+                    }}
+                    disabled={
+                      (modalType === 'extend' && !newExpiryDate) ||
+                      operationLoading
+                    }
+                    className="flex-1"
+                  >
+                    {operationLoading ? (
+                      <VerxioLoaderWhiteSmall size="sm" />
+                    ) : (
+                      <>
+                        {modalType === 'redeem' && 'Confirm Redeem'}
+                        {modalType === 'cancel' && 'Confirm Cancel'}
+                        {modalType === 'extend' && 'Extend Expiry'}
+                      </>
+                    )}
+                  </AppButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Screen */}
+        {showSuccessScreen && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-black/90 border border-white/20 rounded-lg p-8 w-full max-w-md mx-auto text-center">
+              <div className="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-green-400" />
+              </div>
+              <h3 className="text-white font-semibold text-xl mb-2">Success!</h3>
+              <p className="text-white/80 mb-6">{successMessage}</p>
+              <AppButton
+                onClick={() => {
+                  setShowSuccessScreen(false);
+                  setSuccessMessage('');
+                }}
+                className="w-full"
+              >
+                Continue
+              </AppButton>
+            </div>
+          </div>
         )}
       </div>
     </AppLayout>

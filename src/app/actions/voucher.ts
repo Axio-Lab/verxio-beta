@@ -16,7 +16,9 @@ import {
 } from './verxio'
 import { getVerxioConfig } from './loyalty'
 import { getUserVerxioCreditBalance, awardOrRevokeLoyaltyPoints } from './verxio-credit'
-import { getVoucherCollectionDetails } from '@/lib/voucher/getVoucherDetails'
+import { getVoucherCollectionDetails } from '@/lib/voucher/getVoucherCollectionDetails'
+import { getVoucherDetails } from '@/lib/voucher/getVoucherDetails'
+import { getUserByWallet } from './user'
 
 // Create Voucher Collection
 export interface CreateVoucherCollectionData {
@@ -171,7 +173,6 @@ export const getUserVoucherCollections = async (creatorAddress: string, page: nu
       collections.map(async (collection: any) => {
         try {
           const details = await getVoucherCollectionDetails(collection.collectionPublicKey);
-          console.log(details, 'details')
           return {
             ...collection,
             collectionName: details.success ? details.data?.name : 'Unknown Collection',
@@ -278,6 +279,37 @@ export const getVoucherAuthoritySecretKey = async (collectionAddress: string) =>
   }
 }
 
+// Get Voucher Secret Key
+export const getVoucherSecretKey = async (voucherId: string, creatorAddress: string) => {
+  try {
+    const voucher = await prisma.voucher.findFirst({
+      where: {
+        id: voucherId,
+        collection: {
+          creator: creatorAddress
+        }
+      },
+      select: {
+        voucherPrivateKey: true,
+        voucherPublicKey: true
+      }
+    })
+
+    if (!voucher) {
+      return { success: false, error: 'Voucher not found' }
+    }
+
+    return { 
+      success: true, 
+      voucherSecretKey: voucher.voucherPrivateKey,
+      voucherPublicKey: voucher.voucherPublicKey
+    }
+  } catch (error) {
+    console.error('Error fetching voucher secret key:', error)
+    return { success: false, error: 'Failed to fetch voucher secret key' }
+  }
+}
+
 // Get Voucher Collection by Public Key
 export const getVoucherCollectionByPublicKey = async (collectionPublicKey: string, creatorAddress: string) => {
   try {
@@ -312,6 +344,63 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
     // Fetch collection details from blockchain
     const details = await getVoucherCollectionDetails(collectionPublicKey);
     
+    // Fetch detailed voucher information for each voucher
+    const vouchersWithDetails = await Promise.all(
+      collection.vouchers.map(async (voucher: any) => {
+        try {
+          const [voucherDetails, userResult] = await Promise.all([
+            getVoucherDetails(voucher.voucherPublicKey),
+            getUserByWallet(voucher.recipient)
+          ]);
+          
+          // Get email address or fallback to wallet address
+          const recipientEmail = userResult.success && userResult.user?.email 
+            ? userResult.user.email 
+            : userResult.success && userResult.user?.name
+            ? userResult.user.name
+            : voucher.recipient;
+
+          return {
+            ...voucher,
+            recipient: recipientEmail,
+            voucherName: voucherDetails.success ? voucherDetails.data?.name : 'Unknown Voucher',
+            voucherType: voucherDetails.success ? voucherDetails.data?.attributes?.voucherType : 'Unknown',
+            value: voucherDetails.success ? voucherDetails.data?.voucherData?.value : 0,
+            description: voucherDetails.success ? voucherDetails.data?.description : '',
+            expiryDate: voucherDetails.success ? new Date(voucherDetails.data?.voucherData?.expiryDate || 0).toISOString() : '',
+            maxUses: voucherDetails.success ? voucherDetails.data?.voucherData?.maxUses : 1,
+            currentUses: voucherDetails.success ? voucherDetails.data?.voucherData?.currentUses : 0,
+            transferable: voucherDetails.success ? voucherDetails.data?.voucherData?.transferable : true,
+            status: voucherDetails.success ? voucherDetails.data?.voucherData?.status : 'active',
+            merchantId: voucherDetails.success ? voucherDetails.data?.voucherData?.merchantId : '',
+            conditions: voucherDetails.success ? voucherDetails.data?.attributes?.conditions : '',
+            image: voucherDetails.success ? voucherDetails.data?.image : null,
+            isExpired: voucherDetails.success ? (voucherDetails.data?.voucherData?.expiryDate || 0) < Date.now() : false,
+            canRedeem: voucherDetails.success ? (voucherDetails.data?.voucherData?.currentUses || 0) < (voucherDetails.data?.voucherData?.maxUses || 1) : false
+          };
+        } catch (error) {
+          console.error('Error fetching voucher details:', error);
+          return {
+            ...voucher,
+            voucherName: 'Unknown Voucher',
+            voucherType: 'Unknown',
+            value: 0,
+            description: '',
+            expiryDate: '',
+            maxUses: 1,
+            currentUses: 0,
+            transferable: true,
+            status: 'active',
+            merchantId: '',
+            conditions: '',
+            image: null,
+            isExpired: false,
+            canRedeem: false
+          };
+        }
+      })
+    );
+    
     return {
       success: true,
       collection: {
@@ -319,7 +408,8 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
         collectionName: details.success ? details.data?.name : 'Unknown Collection',
         collectionImage: details.success ? details.data?.image : null,
         voucherStats: details.success ? details.data?.voucherStats : null,
-        blockchainDetails: details.success ? details.data : null
+        blockchainDetails: details.success ? details.data : null,
+        vouchers: vouchersWithDetails
       }
     }
   } catch (error: any) {
@@ -389,7 +479,6 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
 
     // Create asset keypair using authority secret key
     const voucherKeypair = createSignerFromKeypair(initializeContext.context.umi, convertSecretKeyToKeypair(collection.authoritySecretKey));
-
 
     // Create keypair for voucher
     const assetSigner = generateSigner(initializeContext.context.umi)
@@ -505,6 +594,7 @@ export const validateVoucher = async (voucherId: string, creatorAddress: string)
 // Redeem Voucher
 export const redeemVoucher = async (voucherId: string, merchantId: string, creatorAddress: string, redemptionAmount?: number) => {
   try {
+    // Get voucher details
     const voucher = await prisma.voucher.findFirst({
       where: {
         id: voucherId,
@@ -513,7 +603,12 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
         }
       },
       select: {
-        voucherPublicKey: true
+        voucherPublicKey: true,
+        collection: {
+          select: {
+            collectionPublicKey: true
+          }
+        }
       }
     })
 
@@ -521,6 +616,15 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
       return {
         success: false,
         error: 'Voucher not found'
+      }
+    }
+
+    // Get voucher collection authority secret key
+    const collectionKeyResult = await getVoucherAuthoritySecretKey(voucher.collection.collectionPublicKey)
+    if (!collectionKeyResult.success) {
+      return {
+        success: false,
+        error: collectionKeyResult.error
       }
     }
 
@@ -535,8 +639,8 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
       }
     }
 
-    // Create update authority signer
-    const updateAuthority = generateSigner(initializeContext.context.umi)
+    // Create update authority signer using collection's authority secret key
+    const updateAuthority = createSignerFromKeypair(initializeContext.context.umi, convertSecretKeyToKeypair(collectionKeyResult.authoritySecretKey))
 
     // Redeem voucher
     const redeemResult = await redeemVoucherCore(initializeContext.context, {
@@ -546,10 +650,10 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
       redemptionAmount,
       redemptionDetails: {
         transactionId: `redeem_${voucherId}_${Date.now()}`,
-        totalAmount: redemptionAmount || voucher.value
+        totalAmount: redemptionAmount || 100 // Default redemption amount
       }
     })
-
+ 
     // Note: Voucher status and usage details are now managed on-chain
 
     return redeemResult
@@ -565,6 +669,7 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
 // Cancel Voucher
 export const cancelVoucher = async (voucherId: string, reason: string, creatorAddress: string) => {
   try {
+    // Get voucher details
     const voucher = await prisma.voucher.findFirst({
       where: {
         id: voucherId,
@@ -573,7 +678,12 @@ export const cancelVoucher = async (voucherId: string, reason: string, creatorAd
         }
       },
       select: {
-        voucherPublicKey: true
+        voucherPublicKey: true,
+        collection: {
+          select: {
+            collectionPublicKey: true
+          }
+        }
       }
     })
 
@@ -581,6 +691,15 @@ export const cancelVoucher = async (voucherId: string, reason: string, creatorAd
       return {
         success: false,
         error: 'Voucher not found'
+      }
+    }
+
+    // Get voucher collection authority secret key
+    const collectionKeyResult = await getVoucherAuthoritySecretKey(voucher.collection.collectionPublicKey)
+    if (!collectionKeyResult.success) {
+      return {
+        success: false,
+        error: collectionKeyResult.error
       }
     }
 
@@ -595,8 +714,8 @@ export const cancelVoucher = async (voucherId: string, reason: string, creatorAd
       }
     }
 
-    // Create update authority signer
-    const updateAuthority = generateSigner(initializeContext.context.umi)
+    // Create update authority signer using collection's authority secret key
+    const updateAuthority = createSignerFromKeypair(initializeContext.context.umi, convertSecretKeyToKeypair(collectionKeyResult.authoritySecretKey))
 
     // Cancel voucher
     const cancelResult = await cancelVoucherCore(initializeContext.context, {
@@ -620,6 +739,7 @@ export const cancelVoucher = async (voucherId: string, reason: string, creatorAd
 // Extend Voucher Expiry
 export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date, creatorAddress: string) => {
   try {
+    // Get voucher details
     const voucher = await prisma.voucher.findFirst({
       where: {
         id: voucherId,
@@ -628,7 +748,12 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
         }
       },
       select: {
-        voucherPublicKey: true
+        voucherPublicKey: true,
+        collection: {
+          select: {
+            collectionPublicKey: true
+          }
+        }
       }
     })
 
@@ -636,6 +761,15 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
       return {
         success: false,
         error: 'Voucher not found'
+      }
+    }
+
+    // Get voucher collection authority secret key
+    const collectionKeyResult = await getVoucherAuthoritySecretKey(voucher.collection.collectionPublicKey)
+    if (!collectionKeyResult.success) {
+      return {
+        success: false,
+        error: collectionKeyResult.error
       }
     }
 
@@ -650,14 +784,14 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
       }
     }
 
-    // Create update authority signer
-    const updateAuthority = generateSigner(initializeContext.context.umi)
+    // Create update authority signer using collection's authority secret key
+    const updateAuthority = createSignerFromKeypair(initializeContext.context.umi, convertSecretKeyToKeypair(collectionKeyResult.authoritySecretKey))
 
     // Extend voucher expiry
     const extendResult = await extendVoucherExpiryCore(initializeContext.context, {
       voucherAddress: publicKey(voucher.voucherPublicKey),
       updateAuthority,
-      newExpiryDate: Math.floor(newExpiryDate.getTime() / 1000)
+      newExpiryDate: newExpiryDate.getTime() // Keep in milliseconds to match mint voucher logic
     })
 
     // Note: Voucher expiry is now managed on-chain

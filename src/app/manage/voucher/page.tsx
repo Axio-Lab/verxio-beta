@@ -110,11 +110,11 @@ export default function ManageVouchersPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg text-left backdrop-blur-sm">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
-              <DollarSign className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-green-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
+              <Gift className="w-5 h-5 text-white" />
             </div>
             <div className="text-sm font-medium text-white">Total Vouchers</div>
-            <div className="text-xl font-bold text-purple-400">
+            <div className="text-xl font-bold text-green-400">
               {collections.reduce((sum, collection) => sum + collection.vouchers.length, 0)}
             </div>
           </div>
