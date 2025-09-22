@@ -166,7 +166,7 @@ export interface BuildTransactionData {
 
 export const buildPaymentTransaction = async (
   data: BuildTransactionData
-): Promise<{ success: boolean; transaction?: string; instructions?: number; connection?: any; error?: string }> => {
+): Promise<{ success: boolean; transaction?: string; instructions?: number; connection?: any; sponsored?: boolean; error?: string }> => {
   try {
     const { reference, amount, recipient, userWallet } = data;
     
@@ -175,7 +175,7 @@ export const buildPaymentTransaction = async (
     }
 
     // Import Solana dependencies
-    const { Connection, PublicKey, Transaction } = await import('@solana/web3.js');
+    const { Connection, PublicKey, Transaction, VersionedTransaction } = await import('@solana/web3.js');
     const {
       getAssociatedTokenAddress,
       createTransferInstruction,
@@ -200,6 +200,10 @@ export const buildPaymentTransaction = async (
       console.error('TREASURY_WALLET environment variable not set');
       return { success: false, error: 'Treasury wallet not configured' }
     }
+
+    // Fee payer wallet for sponsored transactions
+    const FEE_PAYER_PRIVATE_KEY = process.env.PRIVATE_KEY;
+    const FEE_PAYER_ADDRESS = process.env.FEE_ADDRESS;
     
     const TREASURY_FEE_PERCENTAGE = 0.005; // 0.5%
 
@@ -212,7 +216,7 @@ export const buildPaymentTransaction = async (
     
     const tokenMint = new PublicKey(usdcMint);
     const paymentAmount = parseFloat(amount);
-    const treasuryFee = paymentAmount * TREASURY_FEE_PERCENTAGE;
+    const treasuryFee = Math.min(paymentAmount * TREASURY_FEE_PERCENTAGE, 5);
 
     const mintInfo = await getMint(connection, tokenMint);
     const decimals = mintInfo.decimals;
@@ -282,18 +286,31 @@ export const buildPaymentTransaction = async (
     // Get recent blockhash
     const { blockhash } = await connection.getLatestBlockhash();
     transaction.recentBlockhash = blockhash;
-    transaction.feePayer = new PublicKey(userWallet);
+
+    // Check if we have fee payer configured for sponsored transactions
+    const isSponsored = !!(FEE_PAYER_PRIVATE_KEY && FEE_PAYER_ADDRESS);
+    
+    if (isSponsored) {
+      // For sponsored transactions, set fee payer to our sponsored wallet
+      transaction.feePayer = new PublicKey(FEE_PAYER_ADDRESS!);
+    } else {
+      // Use user as fee payer (fallback)
+      transaction.feePayer = new PublicKey(userWallet);
+    }
+
+    // Convert to VersionedTransaction for better compatibility
+    const versionedTransaction = new VersionedTransaction(
+      transaction.compileMessage()
+    );
 
     // Serialize transaction for frontend signing
-    const serializedTransaction = transaction.serialize({
-      requireAllSignatures: false,
-      verifySignatures: false,
-    });
+    const serializedTransaction = versionedTransaction.serialize();
     
     return {
       success: true,
-      transaction: serializedTransaction.toString('base64'),
+      transaction: Buffer.from(serializedTransaction).toString('base64'),
       instructions: transaction.instructions.length,
+      sponsored: isSponsored,
       connection: {
         endpoint: rpcEndpoint,
         commitment: "confirmed"
@@ -388,5 +405,127 @@ export const verifyPayment = async (
       verified: false,
       error: 'Internal server error' 
     }
+  }
+}
+
+export interface SponsorTransactionData {
+  reference: string
+  transaction: string
+}
+
+export const sponsorTransaction = async (
+  data: SponsorTransactionData
+): Promise<{ success: boolean; signature?: string; error?: string }> => {
+  try {
+    const { reference, transaction: serializedTransaction } = data;
+
+    if (!reference || !serializedTransaction) {
+      return { success: false, error: 'Missing reference or transaction data' }
+    }
+
+    // Import Solana dependencies
+    const { Connection, VersionedTransaction, Keypair } = await import('@solana/web3.js');
+    const bs58 = await import('bs58');
+
+    // Fee payer configuration
+    const FEE_PAYER_PRIVATE_KEY = process.env.PRIVATE_KEY;
+    const FEE_PAYER_ADDRESS = process.env.FEE_ADDRESS;
+
+    if (!FEE_PAYER_PRIVATE_KEY || !FEE_PAYER_ADDRESS) {
+      return { success: false, error: 'Fee payer not configured' }
+    }
+
+    // Initialize fee payer keypair
+    const feePayerWallet = Keypair.fromSecretKey(bs58.default.decode(FEE_PAYER_PRIVATE_KEY));
+
+    // Get Verxio config
+    const { getVerxioConfig } = await import('@/app/actions/loyalty');
+    const configResult = await getVerxioConfig();
+    
+    if (!configResult.rpcEndpoint) {
+      return { success: false, error: 'RPC endpoint not configured' }
+    }
+
+    const connection = new Connection(configResult.rpcEndpoint, 'confirmed');
+
+    // Get payment details from database
+    const paymentRecord = await prisma.paymentRecord.findUnique({
+      where: { reference },
+      select: { 
+        reference: true, 
+        amount: true, 
+        recipient: true, 
+        status: true 
+      }
+    });
+
+    if (!paymentRecord) {
+      return { success: false, error: 'Payment record not found' }
+    }
+
+    if (paymentRecord.status !== 'PENDING') {
+      return { success: false, error: 'Payment is no longer pending' }
+    }
+
+    // Deserialize the partially signed transaction
+    const transactionBuffer = Buffer.from(serializedTransaction, 'base64');
+    const transaction = VersionedTransaction.deserialize(transactionBuffer);
+
+    // Verify the transaction
+    // 1. Check that it's using the correct fee payer
+    const message = transaction.message;
+    const accountKeys = message.getAccountKeys();
+    const feePayerIndex = 0; // Fee payer is always the first account
+    const feePayer = accountKeys.get(feePayerIndex);
+
+    if (!feePayer || feePayer.toBase58() !== FEE_PAYER_ADDRESS) {
+      return { success: false, error: 'Invalid fee payer in transaction' }
+    }
+
+    // 2. Check for any unauthorized fund transfers from fee payer
+    for (const instruction of message.compiledInstructions) {
+      const programId = accountKeys.get(instruction.programIdIndex);
+
+      // Check if instruction is for System Program (transfers)
+      if (programId && programId.toBase58() === '11111111111111111111111111111111') {
+        // Check if it's a transfer (command 2)
+        if (instruction.data[0] === 2) {
+          const senderIndex = instruction.accountKeyIndexes[0];
+          const senderAddress = accountKeys.get(senderIndex);
+
+          // Don't allow transactions that transfer tokens from fee payer
+          if (senderAddress && senderAddress.toBase58() === FEE_PAYER_ADDRESS) {
+            return { success: false, error: 'Transaction attempts to transfer funds from fee payer' }
+          }
+        }
+      }
+    }
+
+    // 3. Sign with fee payer
+    transaction.sign([feePayerWallet]);
+
+    // 4. Send transaction
+    const signature = await connection.sendTransaction(transaction);
+
+    // Update payment status
+    await prisma.paymentRecord.update({
+      where: { reference },
+      data: { 
+        status: 'SUCCESS',
+        signature: signature
+      }
+    });
+
+    return {
+      success: true,
+      signature: signature
+    };
+
+  } catch (error) {
+    console.error('Error sponsoring transaction:', error);
+    return { 
+      success: false, 
+      error: 'Failed to sponsor transaction' 
+    };
   }
 }

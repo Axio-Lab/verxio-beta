@@ -125,3 +125,121 @@ export const updateTransferStatus = async (transferId: string, signature: string
     }
   }
 }
+
+// Sponsor transfer transaction (no payment record needed)
+export interface SponsorTransferTransactionData {
+  transaction: string;
+  transferId: string;
+}
+
+export const sponsorTransferTransaction = async (
+  data: SponsorTransferTransactionData
+): Promise<{ success: boolean; signature?: string; error?: string }> => {
+  try {
+    const { transaction: serializedTransaction, transferId } = data;
+
+    if (!serializedTransaction || !transferId) {
+      return { success: false, error: 'Missing transaction data or transfer ID' }
+    }
+
+    // Import Solana dependencies
+    const { Connection, VersionedTransaction, Keypair } = await import('@solana/web3.js');
+    const bs58 = await import('bs58');
+
+    // Fee payer configuration
+    const FEE_PAYER_PRIVATE_KEY = process.env.PRIVATE_KEY;
+    const FEE_PAYER_ADDRESS = process.env.FEE_ADDRESS;
+
+    if (!FEE_PAYER_PRIVATE_KEY || !FEE_PAYER_ADDRESS) {
+      return { success: false, error: 'Fee payer not configured' }
+    }
+
+    // Initialize fee payer keypair
+    const feePayerWallet = Keypair.fromSecretKey(bs58.default.decode(FEE_PAYER_PRIVATE_KEY));
+
+    // Get Verxio config
+    const { getVerxioConfig } = await import('@/app/actions/loyalty');
+    const configResult = await getVerxioConfig();
+    
+    if (!configResult.rpcEndpoint) {
+      return { success: false, error: 'RPC endpoint not configured' }
+    }
+
+    const connection = new Connection(configResult.rpcEndpoint, 'confirmed');
+
+    // Get transfer details from database
+    const transferRecord = await prisma.transferRecord.findUnique({
+      where: { id: transferId },
+      select: { 
+        id: true,
+        senderWalletAddress: true,
+        recipientWalletAddress: true,
+        amount: true,
+        status: true 
+      }
+    });
+
+    if (!transferRecord) {
+      return { success: false, error: 'Transfer record not found' }
+    }
+
+    if (transferRecord.status !== 'PENDING') {
+      return { success: false, error: 'Transfer is no longer pending' }
+    }
+
+    // Deserialize the partially signed transaction
+    const transactionBuffer = Buffer.from(serializedTransaction, 'base64');
+    const transaction = VersionedTransaction.deserialize(transactionBuffer);
+
+    // Verify the transaction
+    // 1. Check that it's using the correct fee payer
+    const message = transaction.message;
+    const accountKeys = message.getAccountKeys();
+    const feePayerIndex = 0; // Fee payer is always the first account
+    const feePayer = accountKeys.get(feePayerIndex);
+
+    if (!feePayer || feePayer.toBase58() !== FEE_PAYER_ADDRESS) {
+      return { success: false, error: 'Invalid fee payer in transaction' }
+    }
+
+    // 2. Check for any unauthorized fund transfers from fee payer
+    for (const instruction of message.compiledInstructions) {
+      const programId = accountKeys.get(instruction.programIdIndex);
+
+      // Check if instruction is for System Program (transfers)
+      if (programId && programId.toBase58() === '11111111111111111111111111111111') {
+        // Check if it's a transfer (command 2)
+        if (instruction.data[0] === 2) {
+          const senderIndex = instruction.accountKeyIndexes[0];
+          const senderAddress = accountKeys.get(senderIndex);
+
+          // Don't allow transactions that transfer tokens from fee payer
+          if (senderAddress && senderAddress.toBase58() === FEE_PAYER_ADDRESS) {
+            return { success: false, error: 'Transaction attempts to transfer funds from fee payer' }
+          }
+        }
+      }
+    }
+
+    // 3. Sign with fee payer
+    transaction.sign([feePayerWallet]);
+
+    // 4. Send transaction
+    const signature = await connection.sendTransaction(transaction);
+
+    // Update transfer status
+    await updateTransferStatus(transferId, signature);
+
+    return {
+      success: true,
+      signature: signature
+    };
+
+  } catch (error) {
+    console.error('Error sponsoring transfer transaction:', error);
+    return { 
+      success: false, 
+      error: 'Failed to sponsor transfer transaction' 
+    };
+  }
+};

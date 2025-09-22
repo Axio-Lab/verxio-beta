@@ -10,9 +10,10 @@ import { useParams } from "next/navigation";
 import { Tiles } from "@/components/layout/backgroundTiles";
 import { VerxioLoaderWhite } from "@/components/ui/verxio-loader-white";
 
-import { Transaction, Connection } from "@solana/web3.js";
+import { Transaction, Connection, VersionedTransaction, PublicKey } from "@solana/web3.js";
 import { awardLoyaltyPointsAfterPurchase, checkUserLoyaltyMembership, fetchLoyaltyProgramDetails } from "./loyalty-actions";
-import { updatePaymentStatus } from "@/app/actions/payment";
+import { updatePaymentStatus, sponsorTransaction } from "@/app/actions/payment";
+import { getUserStats } from "@/app/actions/stats";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -43,6 +44,8 @@ const Page = () => {
     "idle" | "pending" | "success" | "failed"
   >("idle");
   const [transactionSignature, setTransactionSignature] = useState<string>("");
+  const [isSponsored, setIsSponsored] = useState<boolean>(false);
+  const [paymentStep, setPaymentStep] = useState<string>('');
   const [loyaltyMembership, setLoyaltyMembership] = useState<{
     isMember: boolean;
     membershipData?: {
@@ -69,6 +72,8 @@ const Page = () => {
     name: string;
     pointsPerAction: Record<string, number>;
   } | null>(null);
+  const [userBalance, setUserBalance] = useState<string>('0.00');
+  const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(true);
   const statusCheckTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(
@@ -143,6 +148,23 @@ const Page = () => {
     }
   }, [data?.loyaltyProgramAddress]);
 
+  const fetchUserBalance = useCallback(async () => {
+    if (!user?.wallet?.address) return;
+
+    try {
+      setIsLoadingBalance(true);
+      const result = await getUserStats(user.wallet.address);
+      
+      if (result.success && result.stats) {
+        setUserBalance(result.stats.usdcBalance);
+      }
+    } catch (error) {
+      console.error('Error fetching user balance:', error);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, [user?.wallet?.address]);
+
 
   // Check loyalty membership when user connects wallet or data changes
   useEffect(() => {
@@ -150,6 +172,13 @@ const Page = () => {
       checkLoyaltyMembership();
     }
   }, [authenticated, user?.wallet?.address, data?.loyaltyProgramAddress, checkLoyaltyMembership]);
+
+  // Fetch user balance when user connects wallet
+  useEffect(() => {
+    if (authenticated && user?.wallet?.address) {
+      fetchUserBalance();
+    }
+  }, [authenticated, user?.wallet?.address, fetchUserBalance]);
 
   // Fetch loyalty program details when data changes
   useEffect(() => {
@@ -247,11 +276,13 @@ const Page = () => {
 
     setIsProcessing(true);
     setTransactionStatus("pending");
+    setPaymentStep("Initializing payment...");
 
     try {
       if (!data || !data.recipient) {
         setIsLoading(false);
         setTransactionStatus("failed");
+        setPaymentStep("");
         return;
       }
 
@@ -283,23 +314,64 @@ const Page = () => {
         throw new Error(buildResult.error || 'Failed to build transaction');
       }
 
-      const { transaction: serializedTx, connection: connectionConfig } = buildResult;
+      const { transaction: serializedTx, connection: connectionConfig, sponsored } = buildResult;
+      setIsSponsored(sponsored || false);
+      let result;
 
-      // Step 2: User signs and sends transaction using Privy Solana wallet
-      const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
+      if (sponsored) {
+        // For sponsored transactions, user signs their part, then backend adds fee payer signature
+        const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
 
-      // Sign and send transaction using Privy (automatically sends to blockchain)
-      if (!wallets || wallets.length === 0) {
-        throw new Error('No Solana wallets available');
+        if (!wallets || wallets.length === 0) {
+          throw new Error('No Solana wallets available');
+        }
+
+        // For sponsored transactions, we need to sign the message, not the full transaction
+        // First, convert to VersionedTransaction and get the message
+        const versionedTransaction = new VersionedTransaction(transaction.compileMessage());
+        
+        // Serialize the message for signing
+        const serializedMessage = Buffer.from(versionedTransaction.message.serialize());
+        
+        // Sign the message with the user's wallet
+        const { signMessage } = wallets[0];
+        const serializedUserSignature = await signMessage(serializedMessage);
+        
+        // Add user signature to transaction
+        versionedTransaction.addSignature(new PublicKey(wallets[0].address), serializedUserSignature);
+        
+        // Serialize the partially signed transaction
+        const serializedUserSignedTx = Buffer.from(versionedTransaction.serialize()).toString('base64');
+
+        // Send to backend for fee payer signature and broadcasting
+        const sponsorResult = await sponsorTransaction({
+          reference: data.reference,
+          transaction: serializedUserSignedTx
+        });
+
+        if (!sponsorResult.success) {
+          throw new Error(sponsorResult.error || 'Failed to sponsor transaction');
+        }
+
+        result = { signature: sponsorResult.signature || '' };
+      } else {
+        // Regular transaction: User pays fees
+        const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
+
+        // Sign and send transaction using Privy (automatically sends to blockchain)
+        if (!wallets || wallets.length === 0) {
+          throw new Error('No Solana wallets available');
+        }
+
+        result = await sendTransaction({
+          transaction: transaction,
+          connection: new Connection(connectionConfig.endpoint, 'confirmed'),
+          address: wallets[0].address
+        });
       }
 
-      const result = await sendTransaction({
-        transaction: transaction,
-        connection: new Connection(connectionConfig.endpoint, 'confirmed'),
-        address: wallets[0].address
-      });
-
       // Step 3: Update payment status to success in database
+      setPaymentStep("Updating payment status...");
       if (data?.reference) {
         try {
           // Calculate discount amount for database storage
@@ -333,6 +405,7 @@ const Page = () => {
 
       // Step 4: Award loyalty points if loyalty program exists
       if (data?.loyaltyProgramAddress && user?.wallet?.address) {
+        setPaymentStep("Awarding loyalty points...");
         try {
           const loyaltyResult = await awardLoyaltyPointsAfterPurchase(
             user.wallet.address,
@@ -358,7 +431,8 @@ const Page = () => {
 
       setIsProcessing(false);
       setTransactionStatus("success");
-      setTransactionSignature(result.signature);
+      setTransactionSignature(result.signature || '');
+      setPaymentStep("");
       const discountMessage = loyaltyMembership?.selectedDiscount
         ? ` with ${loyaltyMembership.selectedDiscount} discount applied`
         : '';
@@ -370,6 +444,7 @@ const Page = () => {
     } catch (err) {
       setIsProcessing(false);
       setTransactionStatus("failed");
+      setPaymentStep("");
       toast.error("Payment failed. Please try again.");
       console.error("Payment failed:", err);
       return { error: "Transaction failed." };
@@ -850,17 +925,45 @@ const Page = () => {
                 </button>
               ) : (
                 <button
-                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${isProcessing || isCheckingLoyalty || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails)
+                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${isProcessing || isCheckingLoyalty || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails) || isLoadingBalance || parseFloat(userBalance) < (() => {
+                    const baseAmount = parseFloat(data.amount);
+                    const fee = baseAmount * 0.005;
+                    let discount = 0;
+                    if (loyaltyMembership?.selectedDiscount) {
+                      const discountText = loyaltyMembership.selectedDiscount;
+                      if (discountText.includes('%')) {
+                        const percentage = parseFloat(discountText.replace('%', ''));
+                        discount = baseAmount * (percentage / 100);
+                      } else if (discountText.includes('$')) {
+                        discount = parseFloat(discountText.replace('$', ''));
+                      }
+                    }
+                    return baseAmount + fee - discount;
+                  })()
                     ? 'bg-gray-500 cursor-not-allowed opacity-50'
                     : 'bg-[#00adef] cursor-pointer hover:opacity-80'
                     }`}
                   onClick={CreateTransfer}
-                  disabled={isProcessing || isCheckingLoyalty || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails)}
+                  disabled={isProcessing || isCheckingLoyalty || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails) || isLoadingBalance || parseFloat(userBalance) < (() => {
+                    const baseAmount = parseFloat(data.amount);
+                    const fee = baseAmount * 0.005;
+                    let discount = 0;
+                    if (loyaltyMembership?.selectedDiscount) {
+                      const discountText = loyaltyMembership.selectedDiscount;
+                      if (discountText.includes('%')) {
+                        const percentage = parseFloat(discountText.replace('%', ''));
+                        discount = baseAmount * (percentage / 100);
+                      } else if (discountText.includes('$')) {
+                        discount = parseFloat(discountText.replace('$', ''));
+                      }
+                    }
+                    return baseAmount + fee - discount;
+                  })()}
                 >
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Processing...
+                      {paymentStep || 'Processing...'}
                     </>
                   ) : isCheckingLoyalty ? (
                     <>
@@ -872,8 +975,33 @@ const Page = () => {
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Loading Program...
                     </>
+                  ) : isLoadingBalance ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Checking Balance...
+                    </>
+                  ) : parseFloat(userBalance) < (() => {
+                    const baseAmount = parseFloat(data.amount);
+                    const fee = baseAmount * 0.005;
+                    let discount = 0;
+                    if (loyaltyMembership?.selectedDiscount) {
+                      const discountText = loyaltyMembership.selectedDiscount;
+                      if (discountText.includes('%')) {
+                        const percentage = parseFloat(discountText.replace('%', ''));
+                        discount = baseAmount * (percentage / 100);
+                      } else if (discountText.includes('$')) {
+                        discount = parseFloat(discountText.replace('$', ''));
+                      }
+                    }
+                    return baseAmount + fee - discount;
+                  })() ? (
+                    <>
+                      Insufficient Balance
+                    </>
                   ) : (
-                    "Pay Now"
+                    <>
+                      Pay Now
+                    </>
                   )}
                 </button>
               )}
