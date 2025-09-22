@@ -139,7 +139,7 @@ export const getUserVoucherCollections = async (creatorAddress: string, page: nu
     const skip = (page - 1) * limit;
     const take = limit;
 
-    const [collections, totalCount] = await Promise.all([
+    const [collections, totalCount, worthAgg] = await Promise.all([
       prisma.voucherCollection.findMany({
         where: {
           creator: creatorAddress
@@ -165,6 +165,10 @@ export const getUserVoucherCollections = async (creatorAddress: string, page: nu
         where: {
           creator: creatorAddress
         }
+      }),
+      prisma.voucher.aggregate({
+        _sum: { worth: true },
+        where: { collection: { creator: creatorAddress } }
       })
     ])
 
@@ -203,6 +207,9 @@ export const getUserVoucherCollections = async (creatorAddress: string, page: nu
         limit,
         hasNext: page < totalPages,
         hasPrev: page > 1
+      },
+      totals: {
+        totalWorth: worthAgg._sum.worth || 0
       }
     }
   } catch (error: any) {
@@ -522,7 +529,8 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
         recipient,
         voucherPublicKey: asset.publicKey,
         voucherPrivateKey: uint8ArrayToBase58String(asset.secretKey),
-        signature
+        signature,
+        worth: value
       }
     })
 

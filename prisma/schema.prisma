@@ -364,6 +364,7 @@ model Voucher {
   /// @encrypted
   voucherPrivateKey String
   signature         String
+  worth             Float?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   collection        VoucherCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)

@@ -76,7 +76,7 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
     const expiryDateAttr = attributes.find((attr: any) => attr.trait_type === 'Expiry Date');
     const merchantIdAttr = attributes.find((attr: any) => attr.trait_type === 'Merchant ID');
     const statusAttr = attributes.find((attr: any) => attr.trait_type === 'Status');
-    const conditionsAttr = attributes.find((attr: any) => attr.trait_type === 'Conditions');
+    const conditionsAttr = attributes.find((attr: any) => attr.trait_type === 'Conditions' || attr.trait_type === 'conditions');
 
     // Extract collection ID from grouping
     const collectionGrouping = asset.grouping?.find((group: any) => group.group_key === 'collection');

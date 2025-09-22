@@ -7,7 +7,7 @@ import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
 import { getUserVoucherCollections } from '@/app/actions/voucher';
 import { useRouter } from 'next/navigation';
-import { Plus, Gift, DollarSign, ArrowLeft } from 'lucide-react';
+import { Plus, Gift, ArrowLeft, Currency } from 'lucide-react';
 import { AppButton } from '@/components/ui/app-button';
 
 interface VoucherCollection {
@@ -54,7 +54,7 @@ export default function ManageVouchersPage() {
       const res = await getUserVoucherCollections(user.wallet.address, page, size);
       if (res.success && res.collections) {
         setCollections(res.collections as VoucherCollection[]);
-        setPagination(res.pagination);
+        setPagination({ ...res.pagination, totals: res.totals });
       }
     } finally {
       setIsLoading(false);
@@ -100,11 +100,13 @@ export default function ManageVouchersPage() {
             <div className="text-xs text-white/60 font-medium">Start creating vouchers</div>
           </button>
           <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg text-left backdrop-blur-sm">
-            <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-green-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
-              <Gift className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
+              <Currency className="w-5 h-5 text-white" />
             </div>
-            <div className="text-sm font-medium text-white">Total Collections</div>
-            <div className="text-xl font-bold text-green-400">{collections.length}</div>
+            <div className="text-sm font-medium text-white">Voucher Worth</div>
+            <div className="text-xl font-bold text-emerald-300">
+              ${(pagination?.totals?.totalWorth ?? 0).toLocaleString()}
+            </div>
           </div>
         </div>
 
@@ -134,7 +136,7 @@ export default function ManageVouchersPage() {
         <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
           <CardHeader className="relative z-10 pb-3">
             <div className="flex items-center gap-3">
-              <CardTitle className="text-lg text-white font-semibold">My Voucher Collections</CardTitle>
+              <CardTitle className="text-lg text-white font-semibold">My Voucher Collections ({collections.length})</CardTitle>
               {pagination && (
                 <div className="text-xs text-white/60">
                   Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, pagination.total)} of {pagination.total} collections

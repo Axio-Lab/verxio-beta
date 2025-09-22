@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { MintVoucherData } from '@/app/actions/voucher';
 
 // Extend Window interface for timeout
 declare global {
@@ -12,12 +13,12 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
-import { getVoucherCollectionByPublicKey, mintVoucher, validateVoucher, redeemVoucher, cancelVoucher, extendVoucherExpiry } from '@/app/actions/voucher';
+import { getVoucherCollectionByPublicKey, mintVoucher, redeemVoucher, cancelVoucher, extendVoucherExpiry } from '@/app/actions/voucher';
 import { getUserByEmail } from '@/app/actions/user';
 import { generateImageUri } from '@/lib/metadata/generateImageURI';
 import { storeMetadata } from '@/app/actions/metadata';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Plus, Check, X, Clock, Gift, Users, Copy, ExternalLink, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, Check, X, Gift, Users, ExternalLink, Upload } from 'lucide-react';
 import { AppButton } from '@/components/ui/app-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,14 +80,6 @@ interface VoucherCollection {
   }>;
 }
 
-interface Voucher {
-  id: string;
-  voucherPublicKey: string;
-  recipient: string;
-  signature: string;
-  createdAt: string;
-}
-
 export default function VoucherCollectionDetailPage() {
   const { user } = usePrivy();
   const router = useRouter();
@@ -103,11 +96,11 @@ export default function VoucherCollectionDetailPage() {
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
   const [mintData, setMintData] = useState({
     recipient: '',
-    voucherType: 'PERCENTAGE_OFF' as const,
+    voucherType: '',
     value: '',
     expiryDate: '',
     maxUses: '1',
-    transferable: true,
+    transferable: false,
     conditions: ''
   });
   const [recipientWalletAddress, setRecipientWalletAddress] = useState<string | null>(null);
@@ -134,9 +127,6 @@ export default function VoucherCollectionDetailPage() {
   // Modal error state
   const [modalError, setModalError] = useState<string | null>(null);
 
-  // Copy state
-  const [copied, setCopied] = useState(false);
-
   // Separate minting error from critical errors
   const [mintingError, setMintingError] = useState<string | null>(null);
 
@@ -150,6 +140,7 @@ export default function VoucherCollectionDetailPage() {
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const currentVouchers = collection?.vouchers.slice(startIndex, endIndex) || [];
+
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -165,7 +156,6 @@ export default function VoucherCollectionDetailPage() {
     if (window.emailCheckTimeout) {
       clearTimeout(window.emailCheckTimeout);
     }
-
 
 
     // Set new timeout for email check (500ms delay)
@@ -296,7 +286,7 @@ export default function VoucherCollectionDetailPage() {
               value: 'Active',
             },
             {
-              trait_type: 'conditions',
+              trait_type: 'Conditions',
               value: formatConditionString(mintData.conditions),
             },
 
@@ -317,8 +307,8 @@ export default function VoucherCollectionDetailPage() {
         collectionId: collection.id,
         recipient: recipientWalletAddress,
         voucherName,
-        voucherType: mintData.voucherType,
-        value: 0, // Value not needed as per agreement
+        voucherType: mintData.voucherType as MintVoucherData['voucherType'],
+        value: parseFloat(mintData.value),
         description,
         expiryDate: calculatedExpiryDate,
         maxUses: parseInt(mintData.maxUses),
@@ -343,7 +333,7 @@ export default function VoucherCollectionDetailPage() {
         setRecipientWalletAddress(null);
         setMintData({
           recipient: '',
-          voucherType: 'PERCENTAGE_OFF',
+          voucherType: '',
           value: '',
           expiryDate: '',
           maxUses: '1',
@@ -365,26 +355,6 @@ export default function VoucherCollectionDetailPage() {
       // Keep form open for user to retry
     } finally {
       setIsMinting(false);
-    }
-  };
-
-  const handleValidateVoucher = async (voucherId: string) => {
-    if (!user?.wallet?.address) return;
-
-    setOperatingVoucherId(voucherId);
-    setOperationType('validate');
-    try {
-      const result = await validateVoucher(voucherId, user.wallet.address);
-      if (result.success && 'result' in result) {
-        console.log('Voucher validation result:', result.result);
-      } else {
-        setError(result.error || 'Failed to validate voucher');
-      }
-    } catch (error) {
-      setError('Failed to validate voucher');
-    } finally {
-      setOperatingVoucherId(null);
-      setOperationType(null);
     }
   };
 
@@ -502,22 +472,13 @@ export default function VoucherCollectionDetailPage() {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    const s = (status).toString().toUpperCase();
+    switch (s) {
       case 'ACTIVE': return 'text-green-400';
       case 'USED': return 'text-blue-400';
       case 'EXPIRED': return 'text-red-400';
       case 'CANCELLED': return 'text-gray-400';
       default: return 'text-white/60';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return <Check className="w-4 h-4" />;
-      case 'USED': return <Check className="w-4 h-4" />;
-      case 'EXPIRED': return <X className="w-4 h-4" />;
-      case 'CANCELLED': return <X className="w-4 h-4" />;
-      default: return <Clock className="w-4 h-4" />;
     }
   };
 
@@ -576,7 +537,7 @@ export default function VoucherCollectionDetailPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-green-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
               <Gift className="w-5 h-5 text-white" />
             </div>
-            <div className="text-sm font-medium text-white">Total Vouchers Issued</div>
+            <div className="text-sm font-medium text-white">Vouchers Issued</div>
             <div className="text-xl font-bold text-green-400">{collection.vouchers.length}</div>
           </div>
           <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg text-left backdrop-blur-sm">
@@ -646,19 +607,6 @@ export default function VoucherCollectionDetailPage() {
                 <div className="flex-1 text-xs truncate text-white/80 border border-white/10 rounded-md px-3 py-2 bg-white/5">
                   {collection.collectionPublicKey}
                 </div>
-                {/* <AppButton
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(collection.collectionPublicKey);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1500);
-                    } catch { }
-                  }}
-                  variant="secondary"
-                  className="text-xs px-2 py-1"
-                >
-                  {copied ? 'Copied!' : <Copy className="w-3 h-3" />}
-                </AppButton> */}
                 <AppButton
                   onClick={() => window.open(`https://solscan.io/token/${collection.collectionPublicKey}`, '_blank')}
                   variant="secondary"
@@ -767,13 +715,24 @@ export default function VoucherCollectionDetailPage() {
                     options={collection?.blockchainDetails?.metadata?.voucherTypes?.map((type: string) => ({
                       value: type.toUpperCase().replace(' ', '_'),
                       label: type
-                    })) || [
-                        { value: 'FREE_ITEM', label: 'Free Item' },
-                        { value: 'BUY_ONE_GET_ONE', label: 'Buy One Get One' },
-                        { value: 'CUSTOM_REWARD', label: 'Custom Reward' }
-                      ]}
+                    }))}
                     className="bg-black/20 border-white/20 text-white text-sm"
                   />
+                </div>
+                {/* Voucher Worth */}
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Voucher Worth</Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={mintData.value}
+                      onChange={(e) => setMintData({ ...mintData, value: e.target.value })}
+                      placeholder="0.00"
+                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm pr-12"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/60">USD</span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -829,7 +788,13 @@ export default function VoucherCollectionDetailPage() {
                   </AppButton>
                   <AppButton
                     onClick={handleMintVoucher}
-                    disabled={isMinting || !recipientWalletAddress || !mintData.expiryDate || !uploadedImageFile}
+                    disabled={
+                      isMinting ||
+                      !recipientWalletAddress ||
+                      !mintData.voucherType ||
+                      !mintData.expiryDate ||
+                      !uploadedImageFile
+                    }
                     className="flex-1"
                   >
                     {isMinting ? (
@@ -837,7 +802,7 @@ export default function VoucherCollectionDetailPage() {
                     ) : (
                       <>
                         <Plus className="w-4 h-4 mr-2" />
-                        Mint Voucher
+                        Create Voucher
                       </>
                     )}
                   </AppButton>
@@ -879,6 +844,7 @@ export default function VoucherCollectionDetailPage() {
               <>
                 <div className="space-y-3">
                   {currentVouchers.map((voucher) => (
+                    
                     <div key={voucher.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -891,7 +857,7 @@ export default function VoucherCollectionDetailPage() {
 
                       <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
                         <div>Type: {voucher.voucherType.replace(/_/g, ' ')}</div>
-                        <div>Value: {voucher.value}</div>
+                        <div>Value: ${voucher.value}</div>
                         <div>Uses: {voucher.currentUses}/{voucher.maxUses}</div>
                         <div>Expires: {new Date(voucher.expiryDate).toLocaleDateString()}</div>
                       </div>
@@ -906,19 +872,6 @@ export default function VoucherCollectionDetailPage() {
                           <div className="text-xs truncate text-white/80 border border-white/10 rounded-md px-2 py-1 bg-white/5 max-w-[120px]">
                             {voucher.voucherPublicKey.slice(0, 6)}...{voucher.voucherPublicKey.slice(-6)}
                           </div>
-                          {/* <AppButton
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(voucher.voucherPublicKey);
-                                setCopied(true);
-                                setTimeout(() => setCopied(false), 1500);
-                              } catch { }
-                            }}
-                            variant="secondary"
-                            className="text-xs px-1 py-1"
-                          >
-                            {copied ? '✓' : <Copy className="w-3 h-3" />}
-                          </AppButton> */}
                           <AppButton
                             onClick={() => window.open(`https://solscan.io/token/${voucher.voucherPublicKey}?`, '_blank')}
                             variant="secondary"
@@ -928,12 +881,6 @@ export default function VoucherCollectionDetailPage() {
                           </AppButton>
                         </div>
                       </div>
-
-                      {/* {voucher.description && (
-                        <div className="text-xs text-white/60 mb-3">
-                          {voucher.description}
-                        </div>
-                      )} */}
 
                       {voucher.conditions && (
                         <div className="text-xs text-white/60 mb-3">
