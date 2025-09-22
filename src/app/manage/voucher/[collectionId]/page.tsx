@@ -15,10 +15,11 @@ import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
 import { getVoucherCollectionByPublicKey, mintVoucher, redeemVoucher, cancelVoucher, extendVoucherExpiry } from '@/app/actions/voucher';
 import { getUserByEmail } from '@/app/actions/user';
+import { createRewardLink, getRewardLinksForCollection } from '@/app/actions/reward';
 import { generateImageUri } from '@/lib/metadata/generateImageURI';
 import { storeMetadata } from '@/app/actions/metadata';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Plus, Check, X, Gift, Users, ExternalLink, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, Check, X, Gift, Users, ExternalLink, Upload, Link, Copy } from 'lucide-react';
 import { AppButton } from '@/components/ui/app-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -130,6 +131,26 @@ export default function VoucherCollectionDetailPage() {
   // Separate minting error from critical errors
   const [mintingError, setMintingError] = useState<string | null>(null);
 
+  // Reward link states
+  const [showRewardForm, setShowRewardForm] = useState(false);
+  const [rewardData, setRewardData] = useState({
+    voucherType: '',
+    customVoucherType: '',
+    value: '',
+    maxUses: '1',
+    expiryDate: '',
+    transferable: false,
+    conditions: ''
+  });
+  const [rewardImageFile, setRewardImageFile] = useState<File | null>(null);
+  const [rewardImagePreview, setRewardImagePreview] = useState<string | null>(null);
+  const [isCreatingReward, setIsCreatingReward] = useState(false);
+  const [createdRewardLink, setCreatedRewardLink] = useState<string | null>(null);
+  const [rewardError, setRewardError] = useState<string | null>(null);
+  const [rewardLinks, setRewardLinks] = useState<Array<any>>([]);
+  const [rewardCurrentPage, setRewardCurrentPage] = useState(1);
+  const [rewardPageSize] = useState(5);
+
   // Vouchers pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10); // Max 10 items per page
@@ -205,6 +226,9 @@ export default function VoucherCollectionDetailPage() {
         const res = await getVoucherCollectionByPublicKey(collectionPublicKey, user.wallet.address);
         if (res.success && res.collection) {
           setCollection(res.collection as VoucherCollection);
+          // load reward links
+          const linksRes = await getRewardLinksForCollection((res.collection as any).id, user.wallet.address);
+          if (linksRes.success && linksRes.links) setRewardLinks(linksRes.links);
         } else {
           setError(res.error || 'Failed to load voucher collection');
         }
@@ -214,6 +238,13 @@ export default function VoucherCollectionDetailPage() {
     };
     load();
   }, [user?.wallet?.address, collectionPublicKey]);
+
+  // Reward links pagination calculations
+  const totalRewardLinks = rewardLinks.length;
+  const totalRewardPages = Math.ceil(totalRewardLinks / rewardPageSize) || 1;
+  const rewardStartIndex = (rewardCurrentPage - 1) * rewardPageSize;
+  const rewardEndIndex = rewardStartIndex + rewardPageSize;
+  const currentRewardLinks = rewardLinks.slice(rewardStartIndex, rewardEndIndex);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -471,6 +502,68 @@ export default function VoucherCollectionDetailPage() {
     }
   };
 
+  const handleCreateRewardLink = async () => {
+    if (!user?.wallet?.address || !collection || !rewardImageFile) return;
+
+    setRewardError(null);
+    setIsCreatingReward(true);
+    try {
+      // Upload image to IPFS
+      const imageUri = await generateImageUri(rewardImageFile);
+
+      // Create reward link
+      const result = await createRewardLink({
+        creatorAddress: user.wallet.address,
+        collectionId: collection.id,
+        voucherType: rewardData.voucherType === 'CUSTOM_REWARD' ? rewardData.customVoucherType : rewardData.voucherType,
+        value: parseFloat(rewardData.value) || 0,
+        maxUses: parseInt(rewardData.maxUses) || 1,
+        expiryDate: rewardData.expiryDate ? new Date(rewardData.expiryDate) : undefined,
+        transferable: rewardData.transferable,
+        conditions: rewardData.conditions,
+        imageUri
+      });
+
+      if (result.success && result.reward) {
+        const rewardLink = `${window.location.origin}/reward/${result.reward.slug}`;
+        setCreatedRewardLink(rewardLink);
+        // Refresh reward links list
+        const linksRes = await getRewardLinksForCollection(collection.id, user.wallet.address);
+        if (linksRes.success && linksRes.links) setRewardLinks(linksRes.links);
+        // Reset form
+        setRewardData({
+          voucherType: '',
+          customVoucherType: '',
+          value: '',
+          maxUses: '1',
+          expiryDate: '',
+          transferable: false,
+          conditions: ''
+        });
+        setRewardImageFile(null);
+        setShowRewardForm(false);
+      } else {
+        setRewardError(result.error || 'Failed to create reward link');
+      }
+    } catch (error) {
+      console.error('Error creating reward link:', error);
+      setRewardError('Failed to create reward link');
+    } finally {
+      setIsCreatingReward(false);
+    }
+  };
+
+  const copyRewardLink = async () => {
+    if (createdRewardLink) {
+      try {
+        await navigator.clipboard.writeText(createdRewardLink);
+        // You could add a toast notification here
+      } catch (error) {
+        console.error('Failed to copy link:', error);
+      }
+    }
+  };
+
   const getStatusColor = (status: string) => {
     const s = (status).toString().toUpperCase();
     switch (s) {
@@ -478,7 +571,22 @@ export default function VoucherCollectionDetailPage() {
       case 'USED': return 'text-blue-400';
       case 'EXPIRED': return 'text-red-400';
       case 'CANCELLED': return 'text-gray-400';
+      case 'CLAIMED': return 'text-purple-400';
       default: return 'text-white/60';
+    }
+  };
+
+  const getRewardStatusClasses = (status: string) => {
+    const s = (status || '').toString().toUpperCase();
+    switch (s) {
+      case 'ACTIVE':
+        return 'text-green-400 border-green-500/40 bg-green-500/10';
+      case 'CLAIMED':
+        return 'text-purple-400 border-purple-500/40 bg-purple-500/10';
+      case 'EXPIRED':
+        return 'text-red-400 border-red-500/40 bg-red-500/10';
+      default:
+        return 'text-white/60 border-white/20 bg-white/5';
     }
   };
 
@@ -818,6 +926,332 @@ export default function VoucherCollectionDetailPage() {
                   </div>
                 )}
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Create Reward Link */}
+        <Card className="bg-black/50 border-white/10 text-white">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Link className="w-5 h-5" />
+              Create Shareable Reward Link
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!showRewardForm ? (
+              <AppButton
+                onClick={() => {
+                  setShowRewardForm(true);
+                  setRewardError(null);
+                }}
+                className="w-full"
+              >
+                <Link className="w-4 h-4 mr-2" />
+                Create Reward Link
+              </AppButton>
+            ) : (
+              <div className="space-y-4">
+                {/* Image Upload - first */}
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Reward Image</Label>
+                  <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center hover:border-white/30 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setRewardImageFile(file);
+                          const reader = new FileReader();
+                          reader.onload = (ev) => setRewardImagePreview(ev.target?.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                      id="reward-image-upload"
+                    />
+                    <label htmlFor="reward-image-upload" className="cursor-pointer">
+                      {rewardImagePreview ? (
+                        <div className="space-y-2">
+                          <div className="w-full h-32 overflow-hidden rounded-lg relative">
+                            <img src={rewardImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                          </div>
+                          <p className="text-white/60 text-sm text-center">Click to change image</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 flex flex-col items-center">
+                          <Upload className="w-8 h-8 text-white/60" />
+                          <span className="text-white/60 text-sm">Click to upload image</span>
+                          <p className="text-white/40 text-xs">Recommended size: 500x500px</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                {/* Voucher Type from collection + Custom Reward */}
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Voucher Type</Label>
+                  <CustomSelect
+                    value={rewardData.voucherType}
+                    onChange={(value) => setRewardData({ ...rewardData, voucherType: value })}
+                    options={[
+                      ...(collection?.blockchainDetails?.metadata?.voucherTypes?.map((type: string) => ({
+                        value: type.toUpperCase().replace(' ', '_'),
+                        label: type
+                      })) || []),
+                      { value: 'CUSTOM_REWARD', label: 'Select Custom Reward' },
+                    ]}
+                    className="bg-black/20 border-white/20 text-white"
+                  />
+                </div>
+
+                {/* Custom type input when Custom Reward selected */}
+                {rewardData.voucherType === 'CUSTOM_REWARD' && (
+                  <div>
+                    <Label className="text-white text-sm mb-1 block">Custom Reward Type</Label>
+                    <Input
+                      value={rewardData.customVoucherType}
+                      onChange={(e) => setRewardData({ ...rewardData, customVoucherType: e.target.value })}
+                      placeholder="e.g., Free T-Shirt"
+                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                    />
+                  </div>
+                )}
+
+                {/* Value + Max Uses side by side */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-white text-sm mb-1 block">Value (USD)</Label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={rewardData.value}
+                        onChange={(e) => setRewardData({ ...rewardData, value: e.target.value })}
+                        placeholder="0.00"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm pr-12"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/60">USD</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-white text-sm mb-1 block">Max Uses</Label>
+                    <Input
+                      type="number"
+                      value={rewardData.maxUses}
+                      onChange={(e) => setRewardData({ ...rewardData, maxUses: e.target.value })}
+                      placeholder="1"
+                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Expiry Date */}
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Value (USD)</Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={rewardData.value}
+                      onChange={(e) => setRewardData({ ...rewardData, value: e.target.value })}
+                      placeholder="0.00"
+                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm pr-12"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/60">USD</span>
+                  </div>
+                </div>
+
+                {/* Expiry Date */}
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Expiry Date</Label>
+                  <Input
+                    type="date"
+                    value={rewardData.expiryDate}
+                    onChange={(e) => setRewardData({ ...rewardData, expiryDate: e.target.value })}
+                    className="bg-black/20 border-white/20 text-white text-sm"
+                  />
+                </div>
+
+                {/* Conditions */}
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Conditions</Label>
+                  <CustomSelect
+                    value={rewardData.conditions}
+                    onChange={(value) => setRewardData({ ...rewardData, conditions: value })}
+                    options={[
+                      { value: '', label: 'No conditions' },
+                      { value: 'minimum_purchase_10', label: 'Minimum purchase $10' },
+                      { value: 'minimum_purchase_25', label: 'Minimum purchase $25' },
+                      { value: 'minimum_purchase_50', label: 'Minimum purchase $50' },
+                      { value: 'weekdays_only', label: 'Valid weekdays only' },
+                      { value: 'weekends_only', label: 'Valid weekends only' },
+                      { value: 'first_time_customer', label: 'First-time customers only' },
+                      { value: 'new_customer', label: 'New customers only' },
+                      { value: 'loyalty_member', label: 'Loyalty members only' }
+                    ]}
+                    className="bg-black/20 border-white/20 text-white"
+                  />
+                </div>
+
+                
+
+                {/* Transferable */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="transferable"
+                    checked={rewardData.transferable}
+                    onChange={(e) => setRewardData({ ...rewardData, transferable: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <Label htmlFor="transferable" className="text-white text-sm">
+                    Transferable
+                  </Label>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <AppButton
+                    onClick={handleCreateRewardLink}
+                    disabled={
+                      !rewardData.voucherType ||
+                      (rewardData.voucherType === 'CUSTOM_REWARD' && !rewardData.customVoucherType) ||
+                      !rewardImageFile ||
+                      isCreatingReward
+                    }
+                    className="flex-1"
+                  >
+                    {isCreatingReward ? (
+                      <VerxioLoaderWhiteSmall size="sm" />
+                    ) : (
+                      <>
+                        <Link className="w-4 h-4 mr-2" />
+                        Create Reward Link
+                      </>
+                    )}
+                  </AppButton>
+                  <AppButton
+                    onClick={() => {
+                      setShowRewardForm(false);
+                      setRewardError(null);
+                    }}
+                    variant="secondary"
+                    className="px-4"
+                  >
+                    <X className="w-4 h-4" />
+                  </AppButton>
+                </div>
+
+                {/* Reward Error Display */}
+                {rewardError && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <X className="w-4 h-4" />
+                      <span className="text-sm font-medium">{rewardError}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Created Reward Link Display */}
+            {createdRewardLink && (
+              <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <div className="flex items-center gap-2 text-green-400 mb-2">
+                  <Check className="w-4 h-4" />
+                  <span className="text-sm font-medium">Reward link created successfully!</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={createdRewardLink}
+                    readOnly
+                    className="bg-black/20 border-white/20 text-white text-sm"
+                  />
+                  <AppButton
+                    onClick={copyRewardLink}
+                    variant="secondary"
+                    size="sm"
+                    className="px-3"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </AppButton>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Reward Links */}
+        <Card className="bg-black/50 border-white/10 text-white">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Link className="w-5 h-5" />
+              Reward Links ({rewardLinks.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {rewardLinks.length === 0 ? (
+              <div className="text-center py-8 text-white/60">No reward links yet</div>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {currentRewardLinks.map((rl) => (
+                    <div key={rl.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-white font-medium text-sm truncate">{rl.voucherType}</div>
+                        <span className={`px-2 py-1 rounded-full text-[10px] border ${getRewardStatusClasses(rl.status)}`}>
+                          {String(rl.status).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/reward/${rl.slug}`}
+                          readOnly
+                          className="bg-black/20 border-white/20 text-white text-xs"
+                        />
+                        <AppButton
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(`${window.location.origin}/reward/${rl.slug}`);
+                            } catch {}
+                          }}
+                          variant="secondary"
+                          size="sm"
+                          className="px-3"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </AppButton>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Reward Links Pagination */}
+                {totalRewardPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/10">
+                    <button
+                      onClick={() => setRewardCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={rewardCurrentPage === 1}
+                      className="px-3 py-2 text-xs border border-white/20 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                    >
+                      Previous
+                    </button>
+                    <div className="text-xs text-white/60">
+                      Showing {rewardStartIndex + 1}-{Math.min(rewardEndIndex, totalRewardLinks)} of {totalRewardLinks} links
+                    </div>
+                    <button
+                      onClick={() => setRewardCurrentPage((p) => Math.min(totalRewardPages, p + 1))}
+                      disabled={rewardCurrentPage === totalRewardPages}
+                      className="px-3 py-2 text-xs border border-white/20 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

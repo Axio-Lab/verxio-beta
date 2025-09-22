@@ -350,6 +350,7 @@ model VoucherCollection {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   vouchers           Voucher[]
+  rewardLinks        RewardLink[]
 
   @@index([creator])
   @@index([collectionPublicKey])
@@ -373,5 +374,32 @@ model Voucher {
   @@index([recipient])
   @@index([voucherPublicKey])
   @@map("vouchers")
+}
+
+model RewardLink {
+  id           String   @id @default(cuid())
+  creator      String
+  collectionId String
+  slug         String   @unique
+  voucherType  String
+  name         String?
+  description  String?
+  value        Float?
+  maxUses      Int?
+  expiryDate   DateTime?
+  transferable Boolean  @default(false)
+  conditions   String?
+  imageUri     String?
+  metadataUri  String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  collection   VoucherCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@index([creator])
+  @@index([collectionId])
+  @@index([slug])
+  @@map("reward_links")
 }
 
