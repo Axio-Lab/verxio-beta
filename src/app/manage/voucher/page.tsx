@@ -41,7 +41,7 @@ export default function ManageVouchersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [collections, setCollections] = useState<VoucherCollection[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(5);
   const [pagination, setPagination] = useState<any>(null);
 
   // User vouchers states
@@ -50,6 +50,9 @@ export default function ManageVouchersPage() {
   const [showUserVouchers, setShowUserVouchers] = useState(false);
   const [userVouchersCurrentPage, setUserVouchersCurrentPage] = useState(1);
   const [userVouchersPageSize] = useState(5);
+
+  // Collections dropdown state
+  const [showCollections, setShowCollections] = useState(false);
 
   const load = async (page: number = currentPage, size: number = pageSize) => {
     if (!user?.wallet?.address) {
@@ -70,6 +73,7 @@ export default function ManageVouchersPage() {
 
   useEffect(() => {
     load();
+    loadUserVouchers();
   }, [user?.wallet?.address]);
 
   const handlePageChange = (page: number) => {
@@ -86,7 +90,6 @@ export default function ManageVouchersPage() {
       
       if (result.success && result.vouchers) {
         setUserVouchers(result.vouchers);
-        console.log('User vouchers data:', result.vouchers);
       }
     } catch (error) {
       console.error('Error loading user vouchers:', error);
@@ -101,6 +104,13 @@ export default function ManageVouchersPage() {
   const userVouchersStartIndex = (userVouchersCurrentPage - 1) * userVouchersPageSize;
   const userVouchersEndIndex = userVouchersStartIndex + userVouchersPageSize;
   const currentUserVouchers = userVouchers.slice(userVouchersStartIndex, userVouchersEndIndex);
+
+  // Collections pagination calculations
+  const totalCollections = collections.length;
+  const totalCollectionsPages = Math.ceil(totalCollections / pageSize) || 1;
+  const collectionsStartIndex = (currentPage - 1) * pageSize;
+  const collectionsEndIndex = collectionsStartIndex + pageSize;
+  const currentCollections = collections.slice(collectionsStartIndex, collectionsEndIndex);
 
 
   return (
@@ -170,16 +180,10 @@ export default function ManageVouchersPage() {
         <Card className="bg-black/50 border-white/10 text-white">
           <CardHeader
             className="cursor-pointer hover:bg-white/5 transition-colors"
-            onClick={() => {
-              if (!showUserVouchers && userVouchers.length === 0) {
-                loadUserVouchers();
-              }
-              setShowUserVouchers(!showUserVouchers);
-            }}
+            onClick={() => setShowUserVouchers(!showUserVouchers)}
           >
             <CardTitle className="text-lg text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Gift className="w-5 h-5" />
                 My Vouchers ({userVouchers.length})
               </div>
               <span className="text-sm text-gray-400">
@@ -287,18 +291,22 @@ export default function ManageVouchersPage() {
           )}
         </Card>
 
-        <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
-          <CardHeader className="relative z-10 pb-3">
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-lg text-white font-semibold">My Voucher Collections ({collections.length})</CardTitle>
-              {pagination && (
-                <div className="text-xs text-white/60">
-                  Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, pagination.total)} of {pagination.total} collections
-                </div>
-              )}
-            </div>
+        <Card className="bg-black/50 border-white/10 text-white">
+          <CardHeader
+            className="cursor-pointer hover:bg-white/5 transition-colors"
+            onClick={() => setShowCollections(!showCollections)}
+          >
+            <CardTitle className="text-lg text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                My Voucher Collections ({collections.length})
+              </div>
+              <span className="text-sm text-gray-400">
+                {showCollections ? '▼' : '▶'}
+              </span>
+            </CardTitle>
           </CardHeader>
-          <CardContent className="relative z-10 pt-0">
+          {showCollections && (
+            <CardContent>
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <VerxioLoaderWhite size="md" />
@@ -308,7 +316,7 @@ export default function ManageVouchersPage() {
             ) : (
               <>
                 <div className="space-y-3">
-                  {collections.map((collection) => (
+                  {currentCollections.map((collection) => (
                     <button
                       key={collection.id}
                       onClick={() => router.push(`/manage/voucher/${collection.collectionPublicKey}`)}
@@ -333,52 +341,22 @@ export default function ManageVouchersPage() {
                   ))}
                 </div>
                 
-                {/* Pagination */}
-                {pagination && pagination.totalPages > 1 && (
+                {/* Collections Pagination */}
+                {totalCollectionsPages > 1 && (
                   <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/10">
                     <button
-                      onClick={() => handlePageChange(currentPage - 1)}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
                       className="px-3 py-2 text-xs border border-white/20 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white"
                     >
                       Previous
                     </button>
-                    <div className="flex items-center gap-2">
-                      {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                        const pageNum = i + 1;
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-2 text-xs rounded-lg ${
-                              currentPage === pageNum
-                                ? 'bg-blue-600 text-white'
-                                : 'border border-white/20 hover:bg-white/10 text-white'
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-                      {pagination.totalPages > 5 && (
-                        <>
-                          <span className="text-white/60">...</span>
-                          <button
-                            onClick={() => handlePageChange(pagination.totalPages)}
-                            className={`px-3 py-2 text-xs rounded-lg ${
-                              currentPage === pagination.totalPages
-                                ? 'bg-blue-600 text-white'
-                                : 'border border-white/20 hover:bg-white/10 text-white'
-                            }`}
-                          >
-                            {pagination.totalPages}
-                          </button>
-                        </>
-                      )}
+                    <div className="text-xs text-white/60">
+                      Showing {collectionsStartIndex + 1}-{Math.min(collectionsEndIndex, totalCollections)} of {totalCollections} collections
                     </div>
                     <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === pagination.totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalCollectionsPages, p + 1))}
+                      disabled={currentPage === totalCollectionsPages}
                       className="px-3 py-2 text-xs border border-white/20 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white"
                     >
                       Next
@@ -387,7 +365,8 @@ export default function ManageVouchersPage() {
                 )}
               </>
             )}
-          </CardContent>
+            </CardContent>
+          )}
         </Card>
       </div>
     </AppLayout>
