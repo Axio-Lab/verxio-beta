@@ -401,10 +401,14 @@ export const VoucherCheckoutCard = ({
                           <Label className="text-white text-sm">Custom Reward Description</Label>
                           <Input
                             value={type.customValue || ''}
-                            onChange={(e) => updateVoucherType(type.id, 'customValue', e.target.value)}
+                            onChange={(e) => updateVoucherType(type.id, 'customValue', e.target.value.substring(0, 10))}
                             placeholder="Describe your custom reward"
+                            maxLength={10}
                             className="bg-black/20 border-white/20 text-white h-10 text-sm"
                           />
+                          <div className="text-xs text-white/60 mt-1 text-right">
+                            {(type.customValue || '').length}/10 characters
+                          </div>
                         </div>
                       )}
                     </div>

@@ -5,9 +5,9 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
-import { getUserVoucherCollections } from '@/app/actions/voucher';
+import { getUserVoucherCollections, getUserVouchers } from '@/app/actions/voucher';
 import { useRouter } from 'next/navigation';
-import { Plus, Gift, ArrowLeft, Currency } from 'lucide-react';
+import { Plus, Gift, ArrowLeft, Currency, ExternalLink } from 'lucide-react';
 import { AppButton } from '@/components/ui/app-button';
 
 interface VoucherCollection {
@@ -44,6 +44,13 @@ export default function ManageVouchersPage() {
   const [pageSize, setPageSize] = useState(10);
   const [pagination, setPagination] = useState<any>(null);
 
+  // User vouchers states
+  const [userVouchers, setUserVouchers] = useState<any[]>([]);
+  const [userVouchersLoading, setUserVouchersLoading] = useState(false);
+  const [showUserVouchers, setShowUserVouchers] = useState(false);
+  const [userVouchersCurrentPage, setUserVouchersCurrentPage] = useState(1);
+  const [userVouchersPageSize] = useState(5);
+
   const load = async (page: number = currentPage, size: number = pageSize) => {
     if (!user?.wallet?.address) {
       setIsLoading(false);
@@ -69,6 +76,31 @@ export default function ManageVouchersPage() {
     setCurrentPage(page);
     load(page, pageSize);
   };
+
+  const loadUserVouchers = async () => {
+    if (!user?.wallet?.address) return;
+    
+    setUserVouchersLoading(true);
+    try {
+      const result = await getUserVouchers(user.wallet.address);
+      
+      if (result.success && result.vouchers) {
+        setUserVouchers(result.vouchers);
+        console.log('User vouchers data:', result.vouchers);
+      }
+    } catch (error) {
+      console.error('Error loading user vouchers:', error);
+    } finally {
+      setUserVouchersLoading(false);
+    }
+  };
+
+  // User vouchers pagination calculations
+  const totalUserVouchers = userVouchers.length;
+  const totalUserVouchersPages = Math.ceil(totalUserVouchers / userVouchersPageSize) || 1;
+  const userVouchersStartIndex = (userVouchersCurrentPage - 1) * userVouchersPageSize;
+  const userVouchersEndIndex = userVouchersStartIndex + userVouchersPageSize;
+  const currentUserVouchers = userVouchers.slice(userVouchersStartIndex, userVouchersEndIndex);
 
 
   return (
@@ -115,9 +147,12 @@ export default function ManageVouchersPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-green-800 rounded-lg flex items-center justify-center mb-2 shadow-lg">
               <Gift className="w-5 h-5 text-white" />
             </div>
-            <div className="text-sm font-medium text-white">Total Vouchers</div>
+            <div className="text-sm font-medium text-white">Unclaimed Value</div>
             <div className="text-xl font-bold text-green-400">
-              {collections.reduce((sum, collection) => sum + collection.vouchers.length, 0)}
+              ${userVouchers
+                .filter(v => v.voucherData?.status === 'active' && !v.isExpired)
+                .reduce((sum, voucher) => sum + (voucher.voucherData?.value || 0), 0)
+                .toFixed(2)}
             </div>
           </div>
           <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg text-left backdrop-blur-sm">
@@ -126,12 +161,131 @@ export default function ManageVouchersPage() {
             </div>
             <div className="text-sm font-medium text-white">Active Vouchers</div>
             <div className="text-xl font-bold text-orange-400">
-              {collections.reduce((sum, collection) => 
-                sum + collection.vouchers.filter(v => v.status === 'ACTIVE').length, 0
-              )}
+              {userVouchers.filter(v => v.voucherData?.status === 'active' && !v.isExpired).length}
             </div>
           </div>
         </div>
+
+        {/* User Vouchers Section */}
+        <Card className="bg-black/50 border-white/10 text-white">
+          <CardHeader
+            className="cursor-pointer hover:bg-white/5 transition-colors"
+            onClick={() => {
+              if (!showUserVouchers && userVouchers.length === 0) {
+                loadUserVouchers();
+              }
+              setShowUserVouchers(!showUserVouchers);
+            }}
+          >
+            <CardTitle className="text-lg text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Gift className="w-5 h-5" />
+                My Vouchers ({userVouchers.length})
+              </div>
+              <span className="text-sm text-gray-400">
+                {showUserVouchers ? '▼' : '▶'}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          {showUserVouchers && (
+            <CardContent>
+              {userVouchersLoading && userVouchers.length === 0 ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center space-x-2">
+                    <VerxioLoaderWhite size="sm" />
+                    <span className="text-gray-400 text-sm">Loading vouchers...</span>
+                  </div>
+                </div>
+              ) : userVouchers.length > 0 ? (
+                <div className="space-y-3">
+                  {currentUserVouchers.map((voucher, index) => (
+                    <div key={voucher.voucherAddress || index} className="bg-gradient-to-br from-white/10 to-white/5 rounded-lg p-4 border border-white/20 hover:border-white/30 transition-all duration-300">
+                      {/* Voucher Header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-sm font-medium text-white truncate">
+                          {voucher.name || `Voucher ${index + 1}`}
+                        </div>
+                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          voucher.isExpired ? 'bg-red-500/20 text-red-400' :
+                          voucher.voucherData?.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                          voucher.voucherData?.status === 'used' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {voucher.isExpired ? 'EXPIRED' : voucher.voucherData?.status?.toUpperCase()}
+                        </div>
+                      </div>
+
+                      {/* Voucher Details */}
+                      <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
+                        <div>Type: {voucher.voucherData?.type?.replace('_', ' ')}</div>
+                        <div>Value: ${voucher.voucherData?.value}</div>
+                        <div>Uses: {voucher.voucherData?.currentUses}/{voucher.voucherData?.maxUses}</div>
+                        <div>Remaining: {voucher.remainingUses}</div>
+                      </div>
+
+                      {/* Expiry Info and Explorer Link */}
+                      <div className="flex items-center justify-between mb-3">
+                        {voucher.timeUntilExpiry && (
+                          <div className="text-xs text-white/50">
+                            {voucher.isExpired ? 'Expired' : (() => {
+                              const days = Math.floor(voucher.timeUntilExpiry / (1000 * 60 * 60 * 24));
+                              const hours = Math.floor(voucher.timeUntilExpiry / (1000 * 60 * 60));
+                              const minutes = Math.floor(voucher.timeUntilExpiry / (1000 * 60));
+                              
+                              if (days > 0) {
+                                return `Expires in ${days} day${days > 1 ? 's' : ''}`;
+                              } else if (hours > 0) {
+                                return `Expires in ${hours} hour${hours > 1 ? 's' : ''}`;
+                              } else if (minutes > 0) {
+                                return `Expires in ${minutes} minute${minutes > 1 ? 's' : ''}`;
+                              } else {
+                                return 'Expires soon';
+                              }
+                            })()}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => window.open(`https://solscan.io/token/${voucher.voucherAddress}`, '_blank')}
+                          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View on Solscan
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* User Vouchers Pagination */}
+                  {totalUserVouchersPages > 1 && (
+                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/10">
+                      <button
+                        onClick={() => setUserVouchersCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={userVouchersCurrentPage === 1}
+                        className="px-3 py-2 text-xs border border-white/20 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                      >
+                        Previous
+                      </button>
+                      <div className="text-xs text-white/60">
+                        Showing {userVouchersStartIndex + 1}-{Math.min(userVouchersEndIndex, totalUserVouchers)} of {totalUserVouchers} vouchers
+                      </div>
+                      <button
+                        onClick={() => setUserVouchersCurrentPage((p) => Math.min(totalUserVouchersPages, p + 1))}
+                        disabled={userVouchersCurrentPage === totalUserVouchersPages}
+                        className="px-3 py-2 text-xs border border-white/20 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <span className="text-gray-400 text-sm">No vouchers found</span>
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
 
         <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
           <CardHeader className="relative z-10 pb-3">

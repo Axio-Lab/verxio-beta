@@ -67,7 +67,7 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
       const metadata = {
         name: name || collectionName || 'Reward Voucher',
         symbol: 'VERXIO-VOUCHER',
-        description: description || `Voucher from ${collection.collectionName}`|| '',
+        description: `Voucher from ${collection.collectionName}`,
         image: imageUri,
         properties: {
           files: imageUri
@@ -81,6 +81,7 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
           ...(typeof maxUses === 'number' ? [{ trait_type: 'Max Uses', value: String(maxUses) }] : []),
           ...(expiryDate ? [{ trait_type: 'Expiry Date', value: expiryDate.toISOString() }] : []),
           { trait_type: 'Status', value: 'Active' },
+          { trait_type: 'Merchant ID',value: creatorAddress },
           ...(conditions ? [{ trait_type: 'Conditions', value: conditions }] : [])
         ]
       }
@@ -89,7 +90,7 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
     }
 
     // Create a slug (simple cuid)
-    const slug = `r_${Math.random().toString(36).slice(2, 10)}`
+    const slug = `verxio_${Math.random().toString(36).slice(2, 10)}`
 
     const created = await prisma.rewardLink.create({
       data: {
@@ -143,20 +144,25 @@ export const claimRewardLink = async (
     if (!rewardRes.success || !rewardRes.reward) return { success: false, error: rewardRes.error || 'Reward not found' }
     const reward = rewardRes.reward as any
 
-    // Mint using saved config
+    // Check if already claimed
+    if (reward.status === 'claimed') {
+      return { success: false, error: 'This reward has already been claimed.' }
+    }
+
+    // Prepare mint data exactly like mintVoucher expects
     const mintData = {
       collectionId: reward.collectionId,
       recipient,
-      voucherName: reward.name || 'Reward Voucher',
-      voucherType: (reward.voucherType || 'CUSTOM_REWARD') as any,
-      value: reward.value ?? 0,
-      description: reward.description || '',
-      expiryDate: reward.expiryDate ? new Date(reward.expiryDate) : new Date(Date.now() + 7 * 86400000),
-      maxUses: reward.maxUses ?? 1,
+      voucherName: reward.name,
+      voucherType: reward.voucherType,
+      value: reward.value,
+      description: reward.description,
+      expiryDate: reward.expiryDate,
+      maxUses: reward.maxUses,
       transferable: !!reward.transferable,
       merchantId: creatorAddress,
-      conditions: reward.conditions || '',
-      voucherMetadataUri: reward.metadataUri || undefined
+      conditions: reward.conditions,
+      voucherMetadataUri: reward.metadataUri
     }
 
     // If custom reward, replace type with custom value (label sent to chain)
@@ -164,7 +170,7 @@ export const claimRewardLink = async (
       mintData.voucherType = reward.customVoucherType
     }
 
-    const minted = await mintVoucher(mintData as any, creatorAddress)
+    const minted = await mintVoucher(mintData, creatorAddress)
     if (!minted.success || !minted.voucher) {
       return { success: false, error: minted.error || 'Failed to mint voucher' }
     }

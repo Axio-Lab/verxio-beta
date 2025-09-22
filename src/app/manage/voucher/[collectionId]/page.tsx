@@ -153,7 +153,11 @@ export default function VoucherCollectionDetailPage() {
 
   // Vouchers pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(10); // Max 10 items per page
+  const [pageSize] = useState(5); // Max 10 items per page
+
+  // Dropdown states
+  const [showRewardLinks, setShowRewardLinks] = useState(false);
+  const [showVouchers, setShowVouchers] = useState(false);
 
   // Calculate pagination for vouchers
   const totalVouchers = collection?.vouchers.length || 0;
@@ -516,8 +520,8 @@ export default function VoucherCollectionDetailPage() {
         creatorAddress: user.wallet.address,
         collectionId: collection.id,
         voucherType: rewardData.voucherType === 'CUSTOM_REWARD' ? rewardData.customVoucherType : rewardData.voucherType,
-        value: parseFloat(rewardData.value) || 0,
-        maxUses: parseInt(rewardData.maxUses) || 1,
+        value: parseFloat(rewardData.value),
+        maxUses: parseInt(rewardData.maxUses),
         expiryDate: rewardData.expiryDate ? new Date(rewardData.expiryDate) : undefined,
         transferable: rewardData.transferable,
         conditions: rewardData.conditions,
@@ -530,7 +534,7 @@ export default function VoucherCollectionDetailPage() {
         // Refresh reward links list
         const linksRes = await getRewardLinksForCollection(collection.id, user.wallet.address);
         if (linksRes.success && linksRes.links) setRewardLinks(linksRes.links);
-        // Reset form
+        // Reset form and close
         setRewardData({
           voucherType: '',
           customVoucherType: '',
@@ -541,7 +545,9 @@ export default function VoucherCollectionDetailPage() {
           conditions: ''
         });
         setRewardImageFile(null);
+        setRewardImagePreview(null);
         setShowRewardForm(false);
+        setRewardError(null);
       } else {
         setRewardError(result.error || 'Failed to create reward link');
       }
@@ -736,7 +742,6 @@ export default function VoucherCollectionDetailPage() {
         <Card className="bg-black/50 border-white/10 text-white">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
-              <Plus className="w-5 h-5" />
               Mint New Voucher
             </CardTitle>
           </CardHeader>
@@ -934,7 +939,6 @@ export default function VoucherCollectionDetailPage() {
         <Card className="bg-black/50 border-white/10 text-white">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
-              <Link className="w-5 h-5" />
               Create Shareable Reward Link
             </CardTitle>
           </CardHeader>
@@ -1013,10 +1017,14 @@ export default function VoucherCollectionDetailPage() {
                     <Label className="text-white text-sm mb-1 block">Custom Reward Type</Label>
                     <Input
                       value={rewardData.customVoucherType}
-                      onChange={(e) => setRewardData({ ...rewardData, customVoucherType: e.target.value })}
-                      placeholder="e.g., Free T-Shirt"
+                      onChange={(e) => setRewardData({ ...rewardData, customVoucherType: e.target.value.substring(0, 10) })}
+                      placeholder="e.g., T-Shirt"
+                      maxLength={10}
                       className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                     />
+                    <div className="text-xs text-white/60 mt-1 text-right">
+                      {rewardData.customVoucherType.length}/10 characters
+                    </div>
                   </div>
                 )}
 
@@ -1045,22 +1053,6 @@ export default function VoucherCollectionDetailPage() {
                       placeholder="1"
                       className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                     />
-                  </div>
-                </div>
-
-                {/* Expiry Date */}
-                <div>
-                  <Label className="text-white text-sm mb-1 block">Value (USD)</Label>
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={rewardData.value}
-                      onChange={(e) => setRewardData({ ...rewardData, value: e.target.value })}
-                      placeholder="0.00"
-                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm pr-12"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/60">USD</span>
                   </div>
                 </div>
 
@@ -1158,7 +1150,7 @@ export default function VoucherCollectionDetailPage() {
             )}
 
             {/* Created Reward Link Display */}
-            {createdRewardLink && (
+            {/* {createdRewardLink && (
               <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
                 <div className="flex items-center gap-2 text-green-400 mb-2">
                   <Check className="w-4 h-4" />
@@ -1180,19 +1172,28 @@ export default function VoucherCollectionDetailPage() {
                   </AppButton>
                 </div>
               </div>
-            )}
+            )} */}
           </CardContent>
         </Card>
 
         {/* Reward Links */}
         <Card className="bg-black/50 border-white/10 text-white">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Link className="w-5 h-5" />
-              Reward Links ({rewardLinks.length})
+          <CardHeader
+            className="cursor-pointer hover:bg-white/5 transition-colors"
+            onClick={() => setShowRewardLinks(!showRewardLinks)}
+          >
+            <CardTitle className="text-lg text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Link className="w-5 h-5" />
+                Reward Links ({rewardLinks.length})
+              </div>
+              <span className="text-sm text-gray-400">
+                {showRewardLinks ? '▼' : '▶'}
+              </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          {showRewardLinks && (
+            <CardContent>
             {rewardLinks.length === 0 ? (
               <div className="text-center py-8 text-white/60">No reward links yet</div>
             ) : (
@@ -1253,25 +1254,28 @@ export default function VoucherCollectionDetailPage() {
                 )}
               </>
             )}
-          </CardContent>
+            </CardContent>
+          )}
         </Card>
 
         {/* Vouchers List */}
         <Card className="bg-black/50 border-white/10 text-white">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center gap-2">
+          <CardHeader
+            className="cursor-pointer hover:bg-white/5 transition-colors"
+            onClick={() => setShowVouchers(!showVouchers)}
+          >
+            <CardTitle className="text-lg text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
                 Vouchers ({collection.vouchers.length})
-              </CardTitle>
-              {totalVouchers > pageSize && (
-                <div className="text-xs text-white/60">
-                  Showing {startIndex + 1}-{Math.min(endIndex, totalVouchers)} of {totalVouchers} vouchers
-                </div>
-              )}
-            </div>
+              </div>
+              <span className="text-sm text-gray-400">
+                {showVouchers ? '▼' : '▶'}
+              </span>
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          {showVouchers && (
+            <CardContent>
             {collection.vouchers.length === 0 ? (
               <div className="text-center py-8 text-white/60">No vouchers minted yet</div>
             ) : (
@@ -1431,7 +1435,8 @@ export default function VoucherCollectionDetailPage() {
                 )}
               </>
             )}
-          </CardContent>
+            </CardContent>
+          )}
         </Card>
 
         {/* Error Display */}

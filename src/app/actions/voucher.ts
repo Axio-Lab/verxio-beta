@@ -814,39 +814,36 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
   }
 }
 
-// Get User Vouchers (for recipients)
+// Get User Vouchers (for recipients) - using blockchain data
 export const getUserVouchers = async (userAddress: string, collectionAddress?: string) => {
   try {
-    const vouchers = await prisma.voucher.findMany({
-      where: {
-        recipient: userAddress,
-        ...(collectionAddress && {
-          collection: {
-            collectionPublicKey: collectionAddress
-          }
-        })
-      },
-      select: {
-        id: true,
-        voucherPublicKey: true,
-        recipient: true,
-        signature: true,
-        createdAt: true,
-        collection: {
-          select: {
-            id: true,
-            collectionPublicKey: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
+    // Get Verxio configuration
+    const config = await getVerxioConfig()
+    const initializeContext = await initializeVerxio(userAddress, config.rpcEndpoint, config.privateKey!)
+    
+    if (!initializeContext.success || !initializeContext.context) {
+      return {
+        success: false,
+        error: `Initialization failed: ${initializeContext.error}`
       }
+    }
+
+    // Get vouchers from blockchain using core function
+    const vouchersResult = await getUserVouchersCore(initializeContext.context, {
+      userAddress: publicKey(userAddress),
+      ...(collectionAddress && { collectionAddress: publicKey(collectionAddress) })
     })
+
+    if (!vouchersResult.success || !vouchersResult.result) {
+      return {
+        success: false,
+        error: vouchersResult.error || 'Failed to fetch user vouchers from blockchain'
+      }
+    }
 
     return {
       success: true,
-      vouchers
+      vouchers: vouchersResult.result.vouchers || []
     }
   } catch (error: any) {
     console.error('Error fetching user vouchers:', error)

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { motion } from 'framer-motion';
-import { LogOut, AlertCircle, Check, Gift, ExternalLink } from 'lucide-react';
+import { LogOut, AlertCircle, Gift } from 'lucide-react';
 import { Tiles } from '@/components/layout/backgroundTiles';
 import { toast, ToastContainer } from 'react-toastify';
 import "react-toastify/dist/ReactToastify.css";
@@ -38,11 +38,10 @@ export default function ClaimRewardPage() {
   const [rewardDetails, setRewardDetails] = useState<RewardDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isClaiming, setIsClaiming] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [successData, setSuccessData] = useState<{ voucherAddress: string, rewardName: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
   const [isExpired, setIsExpired] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   const rewardId = params.id as string;
 
@@ -102,6 +101,13 @@ export default function ClaimRewardPage() {
     return () => clearInterval(interval);
   }, [rewardDetails?.expiryDate]);
 
+  // Hide splash automatically after it ends or after a fallback timeout
+  useEffect(() => {
+    if (!showSplash) return;
+    const t = setTimeout(() => setShowSplash(false), 4000); // fallback 4s
+    return () => clearTimeout(t);
+  }, [showSplash]);
+
   const handleClaimReward = async () => {
     if (!authenticated || !user?.wallet?.address || !rewardDetails) return;
 
@@ -111,13 +117,9 @@ export default function ClaimRewardPage() {
       const result = await claimRewardLink(rewardId, user.wallet.address, rewardDetails.creator);
       
       if (result.success) {
-        setSuccessData({
-          voucherAddress: result.voucherAddress || '',
-          rewardName: rewardDetails.name || 'Reward Voucher'
-        });
-        setShowSuccess(true);
-        // reflect claimed state immediately
+        // reflect claimed state immediately to trigger the claimed view
         setRewardDetails(prev => prev ? { ...prev, status: 'claimed' } as any : prev);
+        setShowSplash(true); // Play celebration video
         toast.success('Reward claimed successfully!', {
           position: "top-right",
           autoClose: 5000,
@@ -139,26 +141,6 @@ export default function ClaimRewardPage() {
       });
     } finally {
       setIsClaiming(false);
-    }
-  };
-
-  const copyRewardLink = async () => {
-    if (typeof window !== 'undefined') {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success('Reward link copied to clipboard!', {
-          position: "top-right",
-          autoClose: 3000,
-          theme: "dark",
-        });
-      } catch (error) {
-        console.error('Failed to copy link:', error);
-        toast.error('Failed to copy link', {
-          position: "top-right",
-          autoClose: 3000,
-          theme: "dark",
-        });
-      }
     }
   };
 
@@ -224,72 +206,65 @@ export default function ClaimRewardPage() {
   // Already claimed view
   if (rewardDetails.status === 'claimed') {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black relative overflow-hidden">
+        {/* Splash video overlay for "oops" state */}
+        {showSplash && (
+          <div className="fixed inset-0 z-30 pointer-events-none">
+            <video
+              src="/Splash.mp4"
+              className="w-full h-full object-cover opacity-50"
+              autoPlay
+              muted
+              playsInline
+              onEnded={() => setShowSplash(false)}
+            />
+          </div>
+        )}
         <Tiles />
-        <div className="relative z-10 text-center max-w-md mx-auto p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8"
-          >
-            <h1 className="text-2xl font-bold text-white mb-2">Oops!</h1>
-            <p className="text-white/60">
-              {rewardDetails.name || 'This reward'} has already been claimed.
+        {/* Header with Verxio logo */}
+        <header className="fixed top-0 left-0 right-0 z-20 flex items-center justify-between p-4 border-b border-white/10 bg-black/80 backdrop-blur-sm">
+          <div className="relative w-10 h-10">
+            <img src="/logo/verxioIconWhite.svg" alt="Verxio" className="w-full h-full" />
+          </div>
+        </header>
+        <div className="relative z-10 min-h-screen flex items-center justify-center pt-20 px-4">
+          <div className="text-center max-w-md mx-auto p-6">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8"
+            >
+              <h1 className="text-2xl font-bold text-white mb-2">Reward Claimed</h1>
+              <p className="text-white/60 mb-4 text-sm">
+                {rewardDetails.name || 'This reward'} has been successfully claimed.
+              </p>
+            </motion.div>
+            <p className="text-white/80 text-sm text-center mt-8">
+              💜 from Verxio
             </p>
-            {/* <div className="mt-6">
-              <AppButton onClick={() => window.history.back()} className="w-full">Go Back</AppButton>
-            </div> */}
-          </motion.div>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (showSuccess && successData) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Tiles />
-        <div className="relative z-10 text-center max-w-md mx-auto p-6">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15 }}
-            className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8"
-          >
-            <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Check className="w-8 h-8 text-green-400" />
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-2">Reward Claimed!</h1>
-            <p className="text-white/60 mb-6">
-              You've successfully claimed <strong>{successData.rewardName}</strong>
-            </p>
-            {successData.voucherAddress && (
-              <div className="mb-6">
-                <AppButton
-                  onClick={() => window.open(`https://solscan.io/token/${successData.voucherAddress}?cluster=devnet`, '_blank')}
-                  variant="secondary"
-                  className="w-full"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  View on Solscan
-                </AppButton>
-              </div>
-            )}
-            <AppButton
-              onClick={() => window.history.back()}
-              className="w-full"
-            >
-              Done
-            </AppButton>
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Splash video overlay */}
+      {showSplash && (
+        <div className="fixed inset-0 z-30 pointer-events-none">
+          <video
+            src="/Splash.mp4"
+            className="w-full h-full object-cover opacity-50"
+            autoPlay
+            muted
+            playsInline
+            onEnded={() => setShowSplash(false)}
+          />
+        </div>
+      )}
       <Tiles />
       {/* Header - match @claim/ */}
       <header className="fixed top-0 left-0 right-0 z-20 flex items-center justify-between p-4 border-b border-white/10 bg-black/80 backdrop-blur-sm">
