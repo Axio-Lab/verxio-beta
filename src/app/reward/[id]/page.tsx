@@ -104,7 +104,7 @@ export default function ClaimRewardPage() {
   // Hide splash automatically after it ends or after a fallback timeout
   useEffect(() => {
     if (!showSplash) return;
-    const t = setTimeout(() => setShowSplash(false), 4000); // fallback 4s
+    const t = setTimeout(() => setShowSplash(false), 8000); // fallback 8s (safety net only)
     return () => clearTimeout(t);
   }, [showSplash]);
 
@@ -211,13 +211,16 @@ export default function ClaimRewardPage() {
         {showSplash && (
           <div className="fixed inset-0 z-30 pointer-events-none">
             <video
-              src="/Splash.mp4"
               className="w-full h-full object-cover opacity-50"
               autoPlay
               muted
               playsInline
+              preload="auto"
+              onPlay={() => setTimeout(() => setShowSplash(false), 4000)}
               onEnded={() => setShowSplash(false)}
-            />
+            >
+              <source src="/Splash.mp4" type="video/mp4" />
+            </video>
           </div>
         )}
         <Tiles />
@@ -256,13 +259,16 @@ export default function ClaimRewardPage() {
       {showSplash && (
         <div className="fixed inset-0 z-30 pointer-events-none">
           <video
-            src="/Splash.mp4"
             className="w-full h-full object-cover opacity-50"
             autoPlay
             muted
             playsInline
+            preload="auto"
+            onPlay={() => setTimeout(() => setShowSplash(false), 4000)}
             onEnded={() => setShowSplash(false)}
-          />
+          >
+            <source src="/Splash.mp4" type="video/mp4" />
+          </video>
         </div>
       )}
       <Tiles />
