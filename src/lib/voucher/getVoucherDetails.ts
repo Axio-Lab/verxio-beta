@@ -1,7 +1,5 @@
 import { getVerxioConfig } from '@/app/actions/loyalty';
 
-const { rpcEndpoint } = await getVerxioConfig();
-
 export interface VoucherDetails {
   id: string;
   name: string;
@@ -40,6 +38,7 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
   error?: string;
 }> => {
   try {
+    const { rpcEndpoint } = await getVerxioConfig();
     const url = rpcEndpoint;
     const options = {
       method: 'POST',

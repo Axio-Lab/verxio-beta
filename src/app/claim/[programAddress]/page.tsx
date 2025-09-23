@@ -347,7 +347,7 @@ export default function ClaimLoyaltyPassPage() {
           {authenticated && (
             <>
               <span className="text-white text-sm">
-                {user?.wallet?.address?.slice(0, 6)}...{user?.wallet?.address?.slice(-4)}
+                {user?.email?.address || `${user?.wallet?.address?.slice(0, 6)}...${user?.wallet?.address?.slice(-4)}`}
               </span>
               <button
                 onClick={logout}
