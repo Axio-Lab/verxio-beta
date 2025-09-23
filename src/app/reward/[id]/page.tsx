@@ -45,7 +45,7 @@ export default function ClaimRewardPage() {
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
   const [isExpired, setIsExpired] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(false);
   const [voucherDetails, setVoucherDetails] = useState<any>(null);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -130,6 +130,13 @@ export default function ClaimRewardPage() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [rewardDetails?.expiryDate]);
+
+  // Show splash video for already claimed rewards on page load
+  useEffect(() => {
+    if (rewardDetails && rewardDetails.status === 'claimed' && !isLoading) {
+      setShowSplash(true);
+    }
+  }, [rewardDetails, isLoading]);
 
   // Hide splash automatically after it ends or after a fallback timeout
   useEffect(() => {
