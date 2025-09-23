@@ -13,6 +13,7 @@ import { getVoucherDetails } from '@/lib/voucher/getVoucherDetails';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { AppButton } from '@/components/ui/app-button';
 import { ExternalLink } from 'lucide-react';
+import { createOrUpdateUser } from '@/app/actions/user';
 
 interface RewardDetails {
   id: string;
@@ -77,6 +78,29 @@ export default function ClaimRewardPage() {
 
     fetchRewardDetails();
   }, [rewardId]);
+
+  // Create/update user when wallet connects
+  useEffect(() => {
+    const createUserRecord = async () => {
+      if (!authenticated || !user?.wallet?.address) return;
+
+      try {
+        const result = await createOrUpdateUser({
+          walletAddress: user.wallet.address,
+          email: user.email?.address,
+          name: user.email?.address?.split('@')[0] // Use email prefix as name if no name provided
+        });
+
+        if (!result.success) {
+          console.error('Failed to create/update user:', result.error);
+        }
+      } catch (error) {
+        console.error('Error creating/updating user:', error);
+      }
+    };
+
+    createUserRecord();
+  }, [authenticated, user?.wallet?.address, user?.email?.address]);
 
   // Countdown timer for expiry
   useEffect(() => {
@@ -405,13 +429,6 @@ export default function ClaimRewardPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {/* <div className="flex justify-between items-center">
-                    <span className="text-white/60 text-sm">Type</span>
-                    <span className="text-white font-medium">
-                      {formatVoucherType(rewardDetails.voucherType)}
-                    </span>
-                  </div> */}
-
                   {rewardDetails.value && (
                     <div className="flex justify-between items-center">
                       <span className="text-white/60 text-sm">Value</span>
@@ -465,10 +482,17 @@ export default function ClaimRewardPage() {
 
               {/* Claim Button or Status Message */}
               {rewardDetails.status === 'claimed' ? (
-                <div className="text-center">
-                  <div className="mb-4 p-4 bg-green-500/20 border border-green-500/40 rounded-lg">
+                <div className="text-center space-y-4">
+                  <div className="p-4 bg-green-500/20 border border-green-500/40 rounded-lg">
                     <h3 className="text-lg font-semibold text-green-400 mb-2">Reward Claimed</h3>
                   </div>
+                  <AppButton
+                    onClick={() => window.location.href = '/dashboard'}
+                    className="w-full"
+                    variant="secondary"
+                  >
+                    Go to Dashboard
+                  </AppButton>
                 </div>
               ) : authenticated ? (
                 <AppButton
