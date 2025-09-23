@@ -223,31 +223,33 @@ export default function ManageVouchersPage() {
                       <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
                         <div>Type: {voucher.voucherData?.type?.replace('_', ' ')}</div>
                         <div>Value: ${voucher.voucherData?.value}</div>
-                        <div>Uses: {voucher.voucherData?.currentUses}/{voucher.voucherData?.maxUses}</div>
-                        <div>Remaining: {voucher.remainingUses}</div>
+                        {!voucher.isExpired && (
+                          <>
+                            <div>Uses: {voucher.voucherData?.currentUses}/{voucher.voucherData?.maxUses}</div>
+                            <div>Remaining: {voucher.remainingUses}</div>
+                          </>
+                        )}
                       </div>
 
                       {/* Expiry Info and Explorer Link */}
                       <div className="flex items-center justify-between mb-3">
-                        {voucher.timeUntilExpiry && (
-                          <div className="text-xs text-white/50">
-                            {voucher.isExpired ? 'Expired' : (() => {
-                              const days = Math.floor(voucher.timeUntilExpiry / (1000 * 60 * 60 * 24));
-                              const hours = Math.floor(voucher.timeUntilExpiry / (1000 * 60 * 60));
-                              const minutes = Math.floor(voucher.timeUntilExpiry / (1000 * 60));
-                              
-                              if (days > 0) {
-                                return `Expires in ${days} day${days > 1 ? 's' : ''}`;
-                              } else if (hours > 0) {
-                                return `Expires in ${hours} hour${hours > 1 ? 's' : ''}`;
-                              } else if (minutes > 0) {
-                                return `Expires in ${minutes} minute${minutes > 1 ? 's' : ''}`;
-                              } else {
-                                return 'Expires soon';
-                              }
-                            })()}
-                          </div>
-                        )}
+                        <div className="text-xs text-white/50">
+                          {!voucher.isExpired && voucher.timeUntilExpiry ? (() => {
+                            const days = Math.floor(voucher.timeUntilExpiry / (1000 * 60 * 60 * 24));
+                            const hours = Math.floor((voucher.timeUntilExpiry % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            const minutes = Math.floor((voucher.timeUntilExpiry % (1000 * 60 * 60)) / (1000 * 60));
+                            
+                            if (days > 0) {
+                              return `Expires in ${days} day${days > 1 ? 's' : ''}`;
+                            } else if (hours > 0) {
+                              return `Expires in ${hours} hour${hours > 1 ? 's' : ''}`;
+                            } else if (minutes > 0) {
+                              return `Expires in ${minutes} minute${minutes > 1 ? 's' : ''}`;
+                            } else {
+                              return 'Expires soon';
+                            }
+                          })() : ''}
+                        </div>
                         <button
                           onClick={() => window.open(`https://solscan.io/token/${voucher.voucherAddress}`, '_blank')}
                           className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"

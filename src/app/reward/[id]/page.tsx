@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { motion } from 'framer-motion';
@@ -9,8 +9,10 @@ import { Tiles } from '@/components/layout/backgroundTiles';
 import { toast, ToastContainer } from 'react-toastify';
 import "react-toastify/dist/ReactToastify.css";
 import { getRewardLink, claimRewardLink } from '@/app/actions/reward';
+import { getVoucherDetails } from '@/lib/voucher/getVoucherDetails';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { AppButton } from '@/components/ui/app-button';
+import { ExternalLink } from 'lucide-react';
 
 interface RewardDetails {
   id: string;
@@ -28,6 +30,7 @@ interface RewardDetails {
   imageUri: string | null;
   metadataUri: string | null;
   status: string;
+  voucherAddress: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +45,9 @@ export default function ClaimRewardPage() {
   const [countdown, setCountdown] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
   const [isExpired, setIsExpired] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const [voucherDetails, setVoucherDetails] = useState<any>(null);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const rewardId = params.id as string;
 
@@ -108,6 +114,48 @@ export default function ClaimRewardPage() {
     return () => clearTimeout(t);
   }, [showSplash]);
 
+  // Attempt to programmatically start playback when splash appears (iOS/Safari reliability)
+  useEffect(() => {
+    if (!showSplash) return;
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      v.muted = true; // ensure muted before play
+      v.setAttribute('playsinline', 'true');
+      // @ts-ignore legacy iOS attribute
+      v.setAttribute('webkit-playsinline', 'true');
+      const playPromise = v.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch(() => {
+          // ignore autoplay rejection; overlay remains until fallback/onPlay/onEnded
+        });
+      }
+    } catch {}
+  }, [showSplash]);
+
+  // Fetch voucher details when reward is claimed
+  useEffect(() => {
+    const fetchVoucherDetails = async () => {
+      if (!rewardDetails?.voucherAddress || rewardDetails.status !== 'claimed') {
+        return;
+      }
+
+      setVoucherLoading(true);
+      try {
+        const result = await getVoucherDetails(rewardDetails.voucherAddress);
+        if (result.success && result.data) {
+          setVoucherDetails(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching voucher details:', error);
+      } finally {
+        setVoucherLoading(false);
+      }
+    };
+
+    fetchVoucherDetails();
+  }, [rewardDetails?.voucherAddress, rewardDetails?.status]);
+
   const handleClaimReward = async () => {
     if (!authenticated || !user?.wallet?.address || !rewardDetails) return;
 
@@ -172,6 +220,13 @@ export default function ClaimRewardPage() {
     return conditionMap[condition] || condition.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  const formatMaxUses = (maxUses: number | null): string => {
+    if (!maxUses) return 'Unlimited';
+    if (maxUses === 1) return 'Once';
+    if (maxUses === 2) return 'Twice';
+    return `${maxUses} times`;
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -203,54 +258,6 @@ export default function ClaimRewardPage() {
     );
   }
 
-  // Already claimed view
-  if (rewardDetails.status === 'claimed') {
-    return (
-      <div className="min-h-screen bg-black relative overflow-hidden">
-        {/* Splash video overlay for "oops" state */}
-        {showSplash && (
-          <div className="fixed inset-0 z-30 pointer-events-none">
-            <video
-              className="w-full h-full object-cover opacity-50"
-              autoPlay
-              muted
-              playsInline
-              preload="auto"
-              onPlay={() => setTimeout(() => setShowSplash(false), 4000)}
-              onEnded={() => setShowSplash(false)}
-            >
-              <source src="/Splash.mp4" type="video/mp4" />
-            </video>
-          </div>
-        )}
-        <Tiles />
-        {/* Header with Verxio logo */}
-        <header className="fixed top-0 left-0 right-0 z-20 flex items-center justify-between p-4 border-b border-white/10 bg-black/80 backdrop-blur-sm">
-          <div className="relative w-10 h-10">
-            <img src="/logo/verxioIconWhite.svg" alt="Verxio" className="w-full h-full" />
-          </div>
-        </header>
-        <div className="relative z-10 min-h-screen flex items-center justify-center pt-20 px-4">
-          <div className="text-center max-w-md mx-auto p-6">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8"
-            >
-              <h1 className="text-2xl font-bold text-white mb-2">Reward Claimed</h1>
-              <p className="text-white/60 mb-4 text-sm">
-                {rewardDetails.name || 'This reward'} has been successfully claimed.
-              </p>
-            </motion.div>
-            <p className="text-white/80 text-sm text-center mt-8">
-              💜 from Verxio
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
 
   return (
@@ -259,6 +266,7 @@ export default function ClaimRewardPage() {
       {showSplash && (
         <div className="fixed inset-0 z-30 pointer-events-none">
           <video
+            ref={videoRef}
             className="w-full h-full object-cover opacity-50"
             autoPlay
             muted
@@ -281,7 +289,7 @@ export default function ClaimRewardPage() {
           {authenticated && (
             <>
               <span className="text-white text-sm">
-                {user?.wallet?.address?.slice(0, 6)}...{user?.wallet?.address?.slice(-4)}
+                {user?.email?.address || `${user?.wallet?.address?.slice(0, 6)}...${user?.wallet?.address?.slice(-4)}`}
               </span>
               <button
                 onClick={logout}
@@ -321,6 +329,8 @@ export default function ClaimRewardPage() {
                   </div>
                 </div>
               )}
+
+              {/* Claimed Message - Only show for claimed rewards */}
               {/* Reward Image */}
               {rewardDetails.imageUri && (
                 <div className="mb-6">
@@ -337,7 +347,7 @@ export default function ClaimRewardPage() {
               {/* Reward Details */}
               <div className="space-y-4 mb-6">
                 <div>
-                  <h3 className="text-2xl font-bold text-white mb-2">
+                  <h3 className="text-xl font-bold text-white mb-2">
                     {rewardDetails.name || 'Reward Voucher'}
                   </h3>
                 </div>
@@ -361,9 +371,9 @@ export default function ClaimRewardPage() {
 
                   {rewardDetails.maxUses && (
                     <div className="flex justify-between items-center">
-                      <span className="text-white/60 text-sm">Max Uses</span>
+                      <span className="text-white/60 text-sm">Max Use</span>
                       <span className="text-white font-medium">
-                        {rewardDetails.maxUses}
+                        {formatMaxUses(rewardDetails.maxUses)}
                       </span>
                     </div>
                   )}
@@ -383,11 +393,32 @@ export default function ClaimRewardPage() {
                       {formatConditionString(rewardDetails.conditions)}
                     </span>
                   </div>
+
+                  {/* Explorer Link - Only show for claimed rewards */}
+                  {rewardDetails.status === 'claimed' && rewardDetails.voucherAddress && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/60 text-sm">Explorer</span>
+                      <button
+                        onClick={() => window.open(`https://solscan.io/token/${rewardDetails.voucherAddress}`, '_blank')}
+                        className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        View on Solscan
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Claim Button */}
-              {authenticated ? (
+
+              {/* Claim Button or Status Message */}
+              {rewardDetails.status === 'claimed' ? (
+                <div className="text-center">
+                  <div className="mb-4 p-4 bg-green-500/20 border border-green-500/40 rounded-lg">
+                    <h3 className="text-lg font-semibold text-green-400 mb-2">Reward Claimed</h3>
+                  </div>
+                </div>
+              ) : authenticated ? (
                 <AppButton
                   onClick={handleClaimReward}
                   disabled={isClaiming}
@@ -410,9 +441,16 @@ export default function ClaimRewardPage() {
                   onClick={login}
                   className="w-full"
                 >
-                  Connect Wallet to Claim
+                  Continue to Claim Reward
                 </AppButton>
               )}
+
+              {/* Powered by Verxio Protocol - Bottom of card */}
+              <div className="mt-6 pt-4 border-t border-white/10">
+                <p className="text-gray-400 text-xs text-center">
+                  Powered by Verxio Protocol
+                </p>
+              </div>
             </div>
           </motion.div>
         </div>

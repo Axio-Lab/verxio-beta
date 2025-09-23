@@ -100,7 +100,7 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
     }
 
     // Create a slug (simple cuid)
-    const slug = `verxio_${Math.random().toString(36).slice(2, 10)}`
+    const slug = `${Math.random().toString(36).slice(2, 12)}`
 
     const created = await prisma.rewardLink.create({
       data: {
@@ -198,10 +198,13 @@ export const claimRewardLink = async (
       return { success: false, error: minted.error || 'Failed to mint voucher' }
     }
 
-    // Mark reward link as claimed
+    // Mark reward link as claimed and store voucher address
     await prisma.rewardLink.update({
       where: { id: reward.id },
-      data: { status: 'claimed' }
+      data: { 
+        status: 'claimed',
+        voucherAddress: minted.voucher.voucherPublicKey
+      }
     })
 
     // Bubble up identifiers saved by mintVoucher (voucher persisted in DB there)
