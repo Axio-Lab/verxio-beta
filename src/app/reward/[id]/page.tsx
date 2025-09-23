@@ -119,18 +119,63 @@ export default function ClaimRewardPage() {
     if (!showSplash) return;
     const v = videoRef.current;
     if (!v) return;
-    try {
-      v.muted = true; // ensure muted before play
-      v.setAttribute('playsinline', 'true');
-      // @ts-ignore legacy iOS attribute
-      v.setAttribute('webkit-playsinline', 'true');
-      const playPromise = v.play();
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise.catch(() => {
-          // ignore autoplay rejection; overlay remains until fallback/onPlay/onEnded
-        });
+    
+    // Force mobile-friendly attributes
+    v.muted = true;
+    v.setAttribute('playsinline', 'true');
+    v.setAttribute('webkit-playsinline', 'true');
+    v.setAttribute('controls', 'false');
+    v.setAttribute('autoplay', 'true');
+    v.setAttribute('loop', 'false');
+    v.setAttribute('preload', 'auto');
+    
+    // Try to play with user interaction simulation
+    const attemptPlay = async () => {
+      try {
+        // For mobile, we need to ensure the video is ready
+        if (v.readyState < 3) {
+          await new Promise((resolve) => {
+            v.addEventListener('canplaythrough', resolve, { once: true });
+          });
+        }
+        
+        const playPromise = v.play();
+        if (playPromise && typeof playPromise.then === 'function') {
+          await playPromise;
+          console.log('Video autoplay successful');
+        }
+      } catch (error) {
+        console.log('Autoplay failed, trying fallback:', error);
+        // Fallback: try again after a short delay
+        setTimeout(() => {
+          try {
+            v.play().catch(() => {
+              console.log('Fallback autoplay also failed');
+            });
+          } catch (e) {
+            console.log('Fallback autoplay error:', e);
+          }
+        }, 500);
       }
-    } catch {}
+    };
+
+    // Try immediately and also on user interaction
+    attemptPlay();
+    
+    // Also try on first user interaction (mobile browsers often require this)
+    const handleFirstInteraction = () => {
+      attemptPlay();
+      document.removeEventListener('touchstart', handleFirstInteraction);
+      document.removeEventListener('click', handleFirstInteraction);
+    };
+    
+    document.addEventListener('touchstart', handleFirstInteraction, { once: true });
+    document.addEventListener('click', handleFirstInteraction, { once: true });
+    
+    return () => {
+      document.removeEventListener('touchstart', handleFirstInteraction);
+      document.removeEventListener('click', handleFirstInteraction);
+    };
   }, [showSplash]);
 
   // Fetch voucher details when reward is claimed
@@ -272,10 +317,17 @@ export default function ClaimRewardPage() {
             muted
             playsInline
             preload="auto"
+            controls={false}
+            loop={false}
             onPlay={() => setTimeout(() => setShowSplash(false), 4000)}
             onEnded={() => setShowSplash(false)}
+            onError={(e) => {
+              console.log('Video error:', e);
+              setShowSplash(false);
+            }}
           >
             <source src="/Splash.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
           </video>
         </div>
       )}
