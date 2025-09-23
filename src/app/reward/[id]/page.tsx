@@ -371,7 +371,7 @@ export default function ClaimRewardPage() {
 
                   {rewardDetails.maxUses && (
                     <div className="flex justify-between items-center">
-                      <span className="text-white/60 text-sm">Max Uses</span>
+                      <span className="text-white/60 text-sm">Max Use</span>
                       <span className="text-white font-medium">
                         {formatMaxUses(rewardDetails.maxUses)}
                       </span>
