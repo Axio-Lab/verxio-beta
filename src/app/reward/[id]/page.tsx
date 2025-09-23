@@ -405,12 +405,12 @@ export default function ClaimRewardPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center">
+                  {/* <div className="flex justify-between items-center">
                     <span className="text-white/60 text-sm">Type</span>
                     <span className="text-white font-medium">
                       {formatVoucherType(rewardDetails.voucherType)}
                     </span>
-                  </div>
+                  </div> */}
 
                   {rewardDetails.value && (
                     <div className="flex justify-between items-center">
