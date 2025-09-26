@@ -15,7 +15,7 @@ import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
 import { getVoucherCollectionByPublicKey, mintVoucher, redeemVoucher, cancelVoucher, extendVoucherExpiry } from '@/app/actions/voucher';
 import { getUserByEmail } from '@/app/actions/user';
-import { createRewardLink, getRewardLinksForCollection } from '@/app/actions/reward';
+import { createRewardLink, getRewardLinksForCollection, duplicateRewardLinks, bulkCreateRewardLinks } from '@/app/actions/reward';
 import { generateImageUri } from '@/lib/metadata/generateImageURI';
 import { storeMetadata } from '@/app/actions/metadata';
 import { useRouter, useParams } from 'next/navigation';
@@ -140,7 +140,8 @@ export default function VoucherCollectionDetailPage() {
     maxUses: '1',
     expiryDate: '',
     transferable: false,
-    conditions: ''
+    conditions: '',
+    quantity: '1'
   });
   const [rewardImageFile, setRewardImageFile] = useState<File | null>(null);
   const [rewardImagePreview, setRewardImagePreview] = useState<string | null>(null);
@@ -150,6 +151,10 @@ export default function VoucherCollectionDetailPage() {
   const [rewardLinks, setRewardLinks] = useState<Array<any>>([]);
   const [rewardCurrentPage, setRewardCurrentPage] = useState(1);
   const [rewardPageSize] = useState(5);
+  const [showDuplicateForm, setShowDuplicateForm] = useState(false);
+  const [selectedRewardToDuplicate, setSelectedRewardToDuplicate] = useState<any>(null);
+  const [duplicateQuantity, setDuplicateQuantity] = useState('1');
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   // Vouchers pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -158,6 +163,7 @@ export default function VoucherCollectionDetailPage() {
   // Dropdown states
   const [showRewardLinks, setShowRewardLinks] = useState(false);
   const [showVouchers, setShowVouchers] = useState(false);
+  const [showSensitiveInfo, setShowSensitiveInfo] = useState(false);
 
   // Calculate pagination for vouchers
   const totalVouchers = collection?.vouchers.length || 0;
@@ -210,7 +216,15 @@ export default function VoucherCollectionDetailPage() {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Check file size (2MB = 2 * 1024 * 1024 bytes)
+      const maxSize = 2 * 1024 * 1024; // 2MB
+      if (file.size > maxSize) {
+        setMintingError(`File size too large. Maximum size is 2MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+        return;
+      }
+      
       setUploadedImageFile(file);
+      setMintingError(null); // Clear any previous errors
       const reader = new FileReader();
       reader.onload = (e) => {
         setUploadedImage(e.target?.result as string);
@@ -512,44 +526,92 @@ export default function VoucherCollectionDetailPage() {
     setRewardError(null);
     setIsCreatingReward(true);
     try {
-      // Upload image to IPFS
-      const imageUri = await generateImageUri(rewardImageFile);
-
-      // Create reward link
-      const result = await createRewardLink({
-        creatorAddress: user.wallet.address,
-        collectionId: collection.id,
-        voucherType: rewardData.voucherType === 'CUSTOM_REWARD' ? rewardData.customVoucherType : rewardData.voucherType,
-        value: parseFloat(rewardData.value),
-        maxUses: parseInt(rewardData.maxUses),
-        expiryDate: rewardData.expiryDate ? new Date(rewardData.expiryDate) : undefined,
-        transferable: rewardData.transferable,
-        conditions: rewardData.conditions,
-        imageUri
-      });
-
-      if (result.success && result.reward) {
-        const rewardLink = `${window.location.origin}/reward/${result.reward.slug}`;
-        setCreatedRewardLink(rewardLink);
-        // Refresh reward links list
-        const linksRes = await getRewardLinksForCollection(collection.id, user.wallet.address);
-        if (linksRes.success && linksRes.links) setRewardLinks(linksRes.links);
-        // Reset form and close
-        setRewardData({
-          voucherType: '',
-          customVoucherType: '',
-          value: '',
-          maxUses: '1',
-          expiryDate: '',
-          transferable: false,
-          conditions: ''
+      const quantity = parseInt(rewardData.quantity) || 1;
+      
+      if (quantity === 1) {
+        // Single creation - use existing createRewardLink function
+        const imageUri = await generateImageUri(rewardImageFile);
+        
+        const result = await createRewardLink({
+          creatorAddress: user.wallet.address,
+          collectionId: collection.id,
+          voucherType: rewardData.voucherType === 'CUSTOM_REWARD' ? rewardData.customVoucherType : rewardData.voucherType,
+          value: parseFloat(rewardData.value),
+          maxUses: parseInt(rewardData.maxUses),
+          expiryDate: rewardData.expiryDate ? new Date(rewardData.expiryDate) : undefined,
+          transferable: rewardData.transferable,
+          conditions: rewardData.conditions,
+          imageUri
         });
-        setRewardImageFile(null);
-        setRewardImagePreview(null);
-        setShowRewardForm(false);
-        setRewardError(null);
+
+        if (result.success && result.reward) {
+          setCreatedRewardLink(`${window.location.origin}/reward/${result.reward.slug}`);
+          // Refresh reward links list
+          const linksRes = await getRewardLinksForCollection(collection.id, user.wallet.address);
+          if (linksRes.success && linksRes.links) setRewardLinks(linksRes.links);
+          // Reset form and close
+          setRewardData({
+            voucherType: '',
+            customVoucherType: '',
+            value: '',
+            maxUses: '1',
+            expiryDate: '',
+            transferable: false,
+            conditions: '',
+            quantity: '1'
+          });
+          setRewardImageFile(null);
+          setRewardImagePreview(null);
+          setShowRewardForm(false);
+          setRewardError(null);
+        } else {
+          setRewardError(result.error || 'Failed to create reward link');
+        }
       } else {
-        setRewardError(result.error || 'Failed to create reward link');
+        // Bulk creation - upload image once, create metadata once, then duplicate records
+        const imageUri = await generateImageUri(rewardImageFile);
+        
+        // Use bulk creation server action
+        const result = await bulkCreateRewardLinks({
+          creatorAddress: user.wallet.address,
+          collectionId: collection.id,
+          voucherType: rewardData.voucherType === 'CUSTOM_REWARD' ? rewardData.customVoucherType : rewardData.voucherType,
+          value: parseFloat(rewardData.value),
+          maxUses: parseInt(rewardData.maxUses),
+          expiryDate: rewardData.expiryDate ? new Date(rewardData.expiryDate) : undefined,
+          transferable: rewardData.transferable,
+          conditions: rewardData.conditions,
+          imageUri,
+          quantity
+        });
+
+        if (result.success && result.rewards) {
+          // Show all created links
+          const createdLinks = result.rewards.map(reward => `${window.location.origin}/reward/${reward.slug}`);
+          setCreatedRewardLink(createdLinks.join('\n'));
+          
+          // Refresh reward links list
+          const linksRes = await getRewardLinksForCollection(collection.id, user.wallet.address);
+          if (linksRes.success && linksRes.links) setRewardLinks(linksRes.links);
+          
+          // Reset form and close
+          setRewardData({
+            voucherType: '',
+            customVoucherType: '',
+            value: '',
+            maxUses: '1',
+            expiryDate: '',
+            transferable: false,
+            conditions: '',
+            quantity: '1'
+          });
+          setRewardImageFile(null);
+          setRewardImagePreview(null);
+          setShowRewardForm(false);
+          setRewardError(null);
+        } else {
+          setRewardError(result.error || 'Failed to create reward links');
+        }
       }
     } catch (error) {
       console.error('Error creating reward link:', error);
@@ -567,6 +629,44 @@ export default function VoucherCollectionDetailPage() {
       } catch (error) {
         console.error('Failed to copy link:', error);
       }
+    }
+  };
+
+  const handleDuplicateRewardLink = async () => {
+    if (!user?.wallet?.address || !collection || !selectedRewardToDuplicate) return;
+
+    setRewardError(null);
+    setIsDuplicating(true);
+    try {
+      const quantity = parseInt(duplicateQuantity) || 1;
+      
+      // Use server-side duplication for better performance
+      const result = await duplicateRewardLinks({
+        creatorAddress: user.wallet.address,
+        collectionId: collection.id,
+        originalRewardId: selectedRewardToDuplicate.id,
+        quantity
+      });
+
+      if (result.success && result.rewards) {
+        const createdLinks = result.rewards.map(reward => `${window.location.origin}/reward/${reward.slug}`);
+        setCreatedRewardLink(createdLinks.join('\n'));
+        // Refresh reward links list
+        const linksRes = await getRewardLinksForCollection(collection.id, user.wallet.address);
+        if (linksRes.success && linksRes.links) setRewardLinks(linksRes.links);
+        // Reset form and close
+        setShowDuplicateForm(false);
+        setSelectedRewardToDuplicate(null);
+        setDuplicateQuantity('1');
+        setRewardError(null);
+      } else {
+        setRewardError(result.error || 'Failed to duplicate reward links');
+      }
+    } catch (error) {
+      console.error('Error duplicating reward link:', error);
+      setRewardError('Failed to duplicate reward link');
+    } finally {
+      setIsDuplicating(false);
     }
   };
 
@@ -813,7 +913,7 @@ export default function VoucherCollectionDetailPage() {
                         <div className="space-y-2">
                           <Upload className="w-6 h-6 text-white/60 mx-auto" />
                           <p className="text-white/60 text-sm">Click to upload image</p>
-                          <p className="text-white/40 text-xs">Recommended size: 500x500px</p>
+                          <p className="text-white/40 text-xs">Max size: 2MB • Recommended: 500x500px</p>
                         </div>
                       )}
                     </label>
@@ -966,7 +1066,15 @@ export default function VoucherCollectionDetailPage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
+                          // Check file size (2MB = 2 * 1024 * 1024 bytes)
+                          const maxSize = 2 * 1024 * 1024; // 2MB
+                          if (file.size > maxSize) {
+                            setRewardError(`File size too large. Maximum size is 2MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+                            return;
+                          }
+                          
                           setRewardImageFile(file);
+                          setRewardError(null); // Clear any previous errors
                           const reader = new FileReader();
                           reader.onload = (ev) => setRewardImagePreview(ev.target?.result as string);
                           reader.readAsDataURL(file);
@@ -987,7 +1095,7 @@ export default function VoucherCollectionDetailPage() {
                         <div className="space-y-2 flex flex-col items-center">
                           <Upload className="w-8 h-8 text-white/60" />
                           <span className="text-white/60 text-sm">Click to upload image</span>
-                          <p className="text-white/40 text-xs">Recommended size: 500x500px</p>
+                          <p className="text-white/40 text-xs">Max size: 2MB • Recommended: 500x500px</p>
                         </div>
                       )}
                     </label>
@@ -1090,6 +1198,7 @@ export default function VoucherCollectionDetailPage() {
 
                 
 
+
                 {/* Transferable */}
                 <div className="flex items-center gap-2">
                   <input
@@ -1102,6 +1211,23 @@ export default function VoucherCollectionDetailPage() {
                   <Label htmlFor="transferable" className="text-white text-sm">
                     Transferable
                   </Label>
+                </div>
+
+                {/* Quantity */}
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Quantity</Label>
+                  <Input
+                    type="number"
+                    value={rewardData.quantity}
+                    onChange={(e) => setRewardData({ ...rewardData, quantity: e.target.value })}
+                    placeholder="1"
+                    min="1"
+                    max="50"
+                    className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                  />
+                  <div className="text-xs text-white/60 mt-1">
+                    Create multiple reward links with the same details (max 50)
+                  </div>
                 </div>
 
                 {/* Action Buttons */}
@@ -1121,7 +1247,7 @@ export default function VoucherCollectionDetailPage() {
                     ) : (
                       <>
                         <Link className="w-4 h-4 mr-2" />
-                        Create Reward Link
+                        Create {parseInt(rewardData.quantity) > 1 ? `${rewardData.quantity} Reward Links` : 'Reward Link'}
                       </>
                     )}
                   </AppButton>
@@ -1203,9 +1329,22 @@ export default function VoucherCollectionDetailPage() {
                     <div key={rl.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-white font-medium text-sm truncate">{rl.voucherType}</div>
-                        <span className={`px-2 py-1 rounded-full text-[10px] border ${getRewardStatusClasses(rl.status)}`}>
-                          {String(rl.status).toUpperCase()}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-[10px] border ${getRewardStatusClasses(rl.status)}`}>
+                            {String(rl.status).toUpperCase()}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setSelectedRewardToDuplicate(rl);
+                              setShowDuplicateForm(true);
+                              setRewardError(null);
+                            }}
+                            className="px-2 py-1 text-xs border border-blue-500/30 rounded hover:bg-blue-500/10 text-blue-400 transition-colors"
+                            title="Duplicate this reward link"
+                          >
+                            Duplicate
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Input
@@ -1268,6 +1407,15 @@ export default function VoucherCollectionDetailPage() {
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
                 Vouchers ({collection.vouchers.length})
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSensitiveInfo(!showSensitiveInfo);
+                  }}
+                  className="ml-2 px-2 py-1 text-xs border border-white/20 rounded hover:bg-white/10 transition-colors"
+                >
+                  {showSensitiveInfo ? 'Hide' : 'Show'} Sensitive
+                </button>
               </div>
               <span className="text-sm text-gray-400">
                 {showVouchers ? '▼' : '▶'}
@@ -1301,7 +1449,12 @@ export default function VoucherCollectionDetailPage() {
                       </div>
 
                       <div className="text-xs text-white/40 mb-3">
-                        Recipient: {voucher.recipient}
+                        <div className="flex items-center gap-1">
+                          <span>Recipient:</span>
+                          <span className="truncate max-w-[200px]" title={voucher.recipient}>
+                            {showSensitiveInfo ? voucher.recipient : `${voucher.recipient.slice(0, 8)}...${voucher.recipient.slice(-8)}`}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2 mb-3">
@@ -1561,6 +1714,79 @@ export default function VoucherCollectionDetailPage() {
                         {modalType === 'redeem' && 'Confirm Redeem'}
                         {modalType === 'cancel' && 'Confirm Cancel'}
                         {modalType === 'extend' && 'Extend Expiry'}
+                      </>
+                    )}
+                  </AppButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Duplicate Reward Link Modal */}
+        {showDuplicateForm && selectedRewardToDuplicate && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold text-lg">Duplicate Reward Link</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                  <div className="text-white text-sm mb-2">Duplicating:</div>
+                  <div className="text-white font-medium">{selectedRewardToDuplicate.voucherType}</div>
+                  <div className="text-white/60 text-xs">Value: ${selectedRewardToDuplicate.value}</div>
+                </div>
+
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Quantity</Label>
+                  <Input
+                    type="number"
+                    value={duplicateQuantity}
+                    onChange={(e) => setDuplicateQuantity(e.target.value)}
+                    placeholder="1"
+                    min="1"
+                    max="50"
+                    className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                  />
+                  <div className="text-xs text-white/60 mt-1">
+                    Create multiple copies of this reward link (max 50)
+                  </div>
+                </div>
+
+                {/* Duplicate Error Display */}
+                {rewardError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <X className="w-4 h-4" />
+                      <span className="text-sm font-medium">{rewardError}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <AppButton
+                    onClick={() => {
+                      setShowDuplicateForm(false);
+                      setSelectedRewardToDuplicate(null);
+                      setRewardError(null);
+                    }}
+                    variant="secondary"
+                    className="flex-1"
+                  >
+                    Cancel
+                  </AppButton>
+                  <AppButton
+                    onClick={handleDuplicateRewardLink}
+                    disabled={isDuplicating || !duplicateQuantity}
+                    className="flex-1"
+                  >
+                    {isDuplicating ? (
+                      <VerxioLoaderWhiteSmall size="sm" />
+                    ) : (
+                      <>
+                        <Link className="w-4 h-4 mr-2" />
+                        Duplicate {parseInt(duplicateQuantity) > 1 ? `${duplicateQuantity} Links` : 'Link'}
                       </>
                     )}
                   </AppButton>
