@@ -260,42 +260,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Revenue & Discounts */}
-        <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
-          {/* Subtle background pattern */}
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/3 via-transparent to-blue-500/3 opacity-40"></div>
-          
-          <CardHeader className="relative z-10 pb-3">
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-lg text-white font-semibold">Revenue & Discounts</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10 pt-0">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105 text-center">
-                <div className="text-lg font-bold text-green-400 mb-1">
-                  {statsLoading ? (
-                    <Spinner size="sm" className="mx-auto" />
-                  ) : (
-                    `$${stats.totalRevenue}`
-                  )}
-                </div>
-                <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Total Revenue</div>
-              </div>
-              <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105 text-center">
-                <div className="text-lg font-bold text-blue-400 mb-1">
-                  {statsLoading ? (
-                    <Spinner size="sm" className="mx-auto" />
-                    ) : (
-                    `$${stats.totalDiscounts}`
-                  )}
-                </div>
-                <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Discounts Given</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Quick Actions */}
         <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
           {/* Subtle background pattern */}
@@ -349,6 +313,42 @@ export default function Dashboard() {
                   <div className="text-sm font-medium text-white group-hover:text-white/90 transition-colors">Product Management</div>
                   <div className="text-xs text-white/60 font-medium">Manage products</div>
                 </button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Revenue & Discounts */}
+        <Card className="bg-gradient-to-br from-gray-900/90 via-black/80 to-gray-900/90 border border-white/10 text-white overflow-hidden relative">
+          {/* Subtle background pattern */}
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/3 via-transparent to-blue-500/3 opacity-40"></div>
+          
+          <CardHeader className="relative z-10 pb-3">
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-lg text-white font-semibold">Revenue & Discounts</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="relative z-10 pt-0">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105 text-center">
+                <div className="text-lg font-bold text-green-400 mb-1">
+                  {statsLoading ? (
+                    <Spinner size="sm" className="mx-auto" />
+                  ) : (
+                    `$${stats.totalRevenue}`
+                  )}
+                </div>
+                <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Total Revenue</div>
+              </div>
+              <div className="p-3 bg-gradient-to-br from-white/8 to-white/3 rounded-lg border border-white/15 backdrop-blur-sm hover:border-white/25 transition-all duration-300 hover:scale-105 text-center">
+                <div className="text-lg font-bold text-blue-400 mb-1">
+                  {statsLoading ? (
+                    <Spinner size="sm" className="mx-auto" />
+                    ) : (
+                    `$${stats.totalDiscounts}`
+                  )}
+                </div>
+                <div className="text-xs text-white/60 font-medium uppercase tracking-wider">Discounts Given</div>
               </div>
             </div>
           </CardContent>
