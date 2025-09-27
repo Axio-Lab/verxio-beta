@@ -440,6 +440,7 @@ export interface MintVoucherData {
   valueSymbol?: string
   assetName?: string
   assetSymbol?: string
+  tokenAddress?: string
   description: string
   expiryDate: Date
   maxUses: number
@@ -456,6 +457,9 @@ export interface MintVoucherResult {
     voucherPublicKey: string
     signature: string
   }
+  requiresTokenTransfer?: boolean
+  tokenTransferTransaction?: string
+  requiresSponsorship?: boolean
   error?: string
 }
 
@@ -463,12 +467,33 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
   try {
     const { collectionId, recipient, voucherName, voucherType, value, description, expiryDate, maxUses, transferable = true, merchantId, voucherMetadataUri } = data
 
-    // Check if user has sufficient Verxio credits (minimum 1000 required for minting vouchers)
+    // Check if user has sufficient Verxio credits (minimum 1000 for regular, 3000 for TOKEN vouchers)
     const creditCheck = await getUserVerxioCreditBalance(creatorAddress)
-    if (!creditCheck.success || (creditCheck.balance || 0) < 1000) {
+    const requiredCredits = data.voucherType === 'TOKEN' ? 3000 : 1000
+    if (!creditCheck.success || (creditCheck.balance || 0) < requiredCredits) {
       return {
         success: false,
-        error: `Insufficient Verxio credits. You need at least 1000 credits to mint vouchers`
+        error: `Insufficient Verxio credits. You need at least ${requiredCredits} credits to mint ${data.voucherType === 'TOKEN' ? 'TOKEN' : ''} vouchers`
+      }
+    }
+
+    // Check token balance for TOKEN voucher types
+    if (data.voucherType === 'TOKEN' && data.tokenAddress && data.value) {
+      const { checkTokenBalance } = await import('./reward');
+      const balanceCheck = await checkTokenBalance(creatorAddress, data.tokenAddress, data.value);
+      
+      if (!balanceCheck.success) {
+        return {
+          success: false,
+          error: `Failed to check token balance: ${balanceCheck.error}`
+        };
+      }
+      
+      if (!balanceCheck.hasEnough) {
+        return {
+          success: false,
+          error: `Insufficient token balance. Required: ${data.value} tokens, Available: ${balanceCheck.balance || 0} tokens`
+        };
       }
     }
 
@@ -548,10 +573,36 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
       }
     })
 
-    // Deduct 500 Verxio credits for voucher minting
+    // Handle token transfer directly to voucher address for TOKEN voucher types
+    let tokenTransferTransaction: string | undefined;
+    let requiresSponsorship: boolean = false;
+    if (data.voucherType === 'TOKEN' && data.tokenAddress && data.value) {
+      const { createTokenTransferToVoucher } = await import('./reward');
+      
+      const tokenTransferResult = await createTokenTransferToVoucher(
+        creatorAddress,
+        asset.publicKey,
+        data.tokenAddress,
+        data.value
+      );
+      
+      if (!tokenTransferResult.success) {
+        console.error('Failed to create token transfer transaction:', tokenTransferResult.error);
+        return {
+          success: false,
+          error: `Failed to create token transfer: ${tokenTransferResult.error}`
+        };
+      } else {
+        tokenTransferTransaction = tokenTransferResult.transaction;
+        requiresSponsorship = tokenTransferResult.requiresSponsorship || false;
+      }
+    }
+
+    // Deduct Verxio credits for voucher minting (2000 for TOKEN, 500 for others)
+    const creditDeduction = data.voucherType === 'TOKEN' ? 2000 : 500
     const deductionResult = await awardOrRevokeLoyaltyPoints({
       creatorAddress,
-      points: 500,
+      points: creditDeduction,
       assetAddress: asset.publicKey,
       assetOwner: recipient,
       action: 'REVOKE'
@@ -567,7 +618,10 @@ export const mintVoucher = async (data: MintVoucherData, creatorAddress: string)
         id: savedVoucher.id,
         voucherPublicKey: asset.publicKey,
         signature
-      }
+      },
+      requiresTokenTransfer: !!tokenTransferTransaction,
+      tokenTransferTransaction: tokenTransferTransaction,
+      requiresSponsorship: requiresSponsorship
     }
   } catch (error: any) {
     console.error('Error minting voucher:', error)

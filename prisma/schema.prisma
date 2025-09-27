@@ -90,6 +90,30 @@ model VerxioCredit {
   @@map("verxio_credits")
 }
 
+model TokenTransferRecord {
+  id              String            @id @default(cuid())
+  creatorAddress  String
+  tokenAddress    String
+  amount          Float
+  transferType    TokenTransferType
+  signature       String
+  voucherId       String?           // For direct transfers to vouchers
+  rewardId        String?           // For escrow transfers
+  collectionId    String?
+  status          TransferStatus    @default(COMPLETED)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([creatorAddress])
+  @@index([tokenAddress])
+  @@index([transferType])
+  @@index([signature])
+  @@index([voucherId])
+  @@index([rewardId])
+  @@index([createdAt])
+  @@map("token_transfer_records")
+}
+
 model VerxioCreditHistory {
   id           String   @id @default(cuid())
   creator      String
@@ -306,6 +330,7 @@ enum TransferStatus {
   PENDING
   SUCCESS
   FAILED
+  COMPLETED
 }
 
 enum TaskStatus {
@@ -337,6 +362,11 @@ enum PurchaseStatus {
   COMPLETED
   FAILED
   REFUNDED
+}
+
+enum TokenTransferType {
+  TO_ESCROW      // Transfer to escrow for reward links
+  TO_VOUCHER     // Direct transfer to voucher address for manual mint
 }
 
 model VoucherCollection {

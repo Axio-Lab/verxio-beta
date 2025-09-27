@@ -13,9 +13,11 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
+import { useSolanaWallets, useSendTransaction } from '@privy-io/react-auth/solana';
+import { Transaction, VersionedTransaction, PublicKey, Connection } from '@solana/web3.js';
 import { getVoucherCollectionByPublicKey, mintVoucher, redeemVoucher, cancelVoucher, extendVoucherExpiry } from '@/app/actions/voucher';
 import { getUserByEmail } from '@/app/actions/user';
-import { createRewardLink, getRewardLinksForCollection, duplicateRewardLinks, bulkCreateRewardLinks } from '@/app/actions/reward';
+import { createRewardLink, getRewardLinksForCollection, duplicateRewardLinks, bulkCreateRewardLinks, sponsorTokenTransfer, sponsorEscrowTransfer } from '@/app/actions/reward';
 import { generateImageUri } from '@/lib/metadata/generateImageURI';
 import { storeMetadata } from '@/app/actions/metadata';
 import { useRouter, useParams } from 'next/navigation';
@@ -84,6 +86,8 @@ interface VoucherCollection {
 
 export default function VoucherCollectionDetailPage() {
   const { user } = usePrivy();
+  const { wallets } = useSolanaWallets();
+  const { sendTransaction } = useSendTransaction();
   const router = useRouter();
   const params = useParams();
   const collectionPublicKey = params.collectionId as string;
@@ -419,6 +423,51 @@ export default function VoucherCollectionDetailPage() {
       // console.log('Full mint voucher data:', mintVoucherData);
       const result = await mintVoucher(mintVoucherData, user.wallet.address);
       if (result.success) {
+        // Handle token transfer if required - Follow exact same pattern as send page
+        if (result.requiresTokenTransfer && result.tokenTransferTransaction) {
+          try {
+            // Since FEE_ADDRESS is in env, this will always be a sponsored transaction
+            const transaction = Transaction.from(Buffer.from(result.tokenTransferTransaction, 'base64'));
+
+            if (!wallets || wallets.length === 0) {
+              throw new Error('No Solana wallets available');
+            }
+
+            // For sponsored transactions, user signs their part, then backend adds fee payer signature
+            // Convert to VersionedTransaction and get the message
+            const versionedTransaction = new VersionedTransaction(transaction.compileMessage());
+            
+            // Serialize the message for signing
+            const serializedMessage = Buffer.from(versionedTransaction.message.serialize());
+            
+            // Sign the message with the user's wallet
+            const { signMessage } = wallets[0];
+            const serializedUserSignature = await signMessage(serializedMessage);
+            
+            // Add user signature to transaction
+            versionedTransaction.addSignature(new PublicKey(wallets[0].address), serializedUserSignature);
+            
+            // Serialize the partially signed transaction
+            const serializedUserSignedTx = Buffer.from(versionedTransaction.serialize()).toString('base64');
+
+            // Send to backend for fee payer signature and broadcasting
+            const sponsorResult = await sponsorTokenTransfer({
+              voucherId: result.voucher!.id,
+              transaction: serializedUserSignedTx
+            });
+
+            if (!sponsorResult.success) {
+              throw new Error(sponsorResult.error || 'Failed to sponsor token transfer');
+            }
+
+            console.log('Token transfer successful (sponsored):', sponsorResult.signature);
+          } catch (tokenError) {
+            console.error('Token transfer failed:', tokenError);
+            setMintingError(`Voucher minted but token transfer failed: ${tokenError instanceof Error ? tokenError.message : 'Unknown error'}`);
+            // Don't fail the entire operation, just show warning
+          }
+        }
+
         // Refresh collection data
         const res = await getVoucherCollectionByPublicKey(collectionPublicKey, user.wallet.address);
         if (res.success && res.collection) {
@@ -603,6 +652,50 @@ export default function VoucherCollectionDetailPage() {
         });
 
         if (result.success && result.reward) {
+          // Handle escrow transfer if required
+          if (result.requiresEscrowTransfer && result.escrowTransaction && result.reward) {
+            try {
+              // Since FEE_ADDRESS is in env, this will always be a sponsored transaction
+              const transaction = Transaction.from(Buffer.from((result as any).escrowTransaction, 'base64'));
+
+              if (!wallets || wallets.length === 0) {
+                throw new Error('No Solana wallets available');
+              }
+
+              // For sponsored transactions, user signs their part, then backend adds fee payer signature
+              const versionedTransaction = new VersionedTransaction(transaction.compileMessage());
+              
+              // Serialize the message for signing
+              const serializedMessage = Buffer.from(versionedTransaction.message.serialize());
+              
+              // Sign the message with the user's wallet
+              const { signMessage } = wallets[0];
+              const serializedUserSignature = await signMessage(serializedMessage);
+              
+              // Add user signature to transaction
+              versionedTransaction.addSignature(new PublicKey(wallets[0].address), serializedUserSignature);
+              
+              // Serialize the partially signed transaction
+              const serializedUserSignedTx = Buffer.from(versionedTransaction.serialize()).toString('base64');
+
+              // Send to backend for fee payer signature and broadcasting
+              const sponsorResult = await sponsorEscrowTransfer({
+                rewardId: (result as any).reward.id,
+                transaction: serializedUserSignedTx
+              });
+
+              if (!sponsorResult.success) {
+                throw new Error(sponsorResult.error || 'Failed to sponsor escrow transfer');
+              }
+
+              console.log('Escrow transfer successful (sponsored):', sponsorResult.signature);
+            } catch (escrowError) {
+              console.error('Escrow transfer failed:', escrowError);
+              setRewardError(`Reward link created but escrow transfer failed: ${escrowError instanceof Error ? escrowError.message : 'Unknown error'}`);
+              // Don't fail the entire operation, just show warning
+            }
+          }
+
           setCreatedRewardLink(`${window.location.origin}/reward/${result.reward.slug}`);
           // Refresh reward links list
           const linksRes = await getRewardLinksForCollection(collection.id, user.wallet.address);
@@ -653,6 +746,50 @@ export default function VoucherCollectionDetailPage() {
         });
 
         if (result.success && result.rewards) {
+          // Handle escrow transfer if required
+          if (result.requiresEscrowTransfer && result.escrowTransaction) {
+            try {
+              // Since FEE_ADDRESS is in env, this will always be a sponsored transaction
+              const transaction = Transaction.from(Buffer.from(result.escrowTransaction, 'base64'));
+
+              if (!wallets || wallets.length === 0) {
+                throw new Error('No Solana wallets available');
+              }
+
+              // For sponsored transactions, user signs their part, then backend adds fee payer signature
+              const versionedTransaction = new VersionedTransaction(transaction.compileMessage());
+              
+              // Serialize the message for signing
+              const serializedMessage = Buffer.from(versionedTransaction.message.serialize());
+              
+              // Sign the message with the user's wallet
+              const { signMessage } = wallets[0];
+              const serializedUserSignature = await signMessage(serializedMessage);
+              
+              // Add user signature to transaction
+              versionedTransaction.addSignature(new PublicKey(wallets[0].address), serializedUserSignature);
+              
+              // Serialize the partially signed transaction
+              const serializedUserSignedTx = Buffer.from(versionedTransaction.serialize()).toString('base64');
+
+              // Send to backend for fee payer signature and broadcasting
+              const sponsorResult = await sponsorEscrowTransfer({
+                rewardId: result.rewards[0].id, // Use first reward ID for bulk transfers
+                transaction: serializedUserSignedTx
+              });
+
+              if (!sponsorResult.success) {
+                throw new Error(sponsorResult.error || 'Failed to sponsor escrow transfer');
+              }
+
+              console.log('Escrow transfer successful (sponsored):', sponsorResult.signature);
+            } catch (escrowError) {
+              console.error('Escrow transfer failed:', escrowError);
+              setRewardError(`Reward links created but escrow transfer failed: ${escrowError instanceof Error ? escrowError.message : 'Unknown error'}`);
+              // Don't fail the entire operation, just show warning
+            }
+          }
+
           // Show all created links
           const createdLinks = result.rewards.map(reward => `${window.location.origin}/reward/${reward.slug}`);
           setCreatedRewardLink(createdLinks.join('\n'));
@@ -721,6 +858,50 @@ export default function VoucherCollectionDetailPage() {
       });
 
       if (result.success && result.rewards) {
+        // Handle escrow transfer if required
+        if (result.requiresEscrowTransfer && result.escrowTransaction && result.rewards) {
+          try {
+            // Since FEE_ADDRESS is in env, this will always be a sponsored transaction
+            const transaction = Transaction.from(Buffer.from(result.escrowTransaction, 'base64'));
+
+            if (!wallets || wallets.length === 0) {
+              throw new Error('No Solana wallets available');
+            }
+
+            // For sponsored transactions, user signs their part, then backend adds fee payer signature
+            const versionedTransaction = new VersionedTransaction(transaction.compileMessage());
+            
+            // Serialize the message for signing
+            const serializedMessage = Buffer.from(versionedTransaction.message.serialize());
+            
+            // Sign the message with the user's wallet
+            const { signMessage } = wallets[0];
+            const serializedUserSignature = await signMessage(serializedMessage);
+            
+            // Add user signature to transaction
+            versionedTransaction.addSignature(new PublicKey(wallets[0].address), serializedUserSignature);
+            
+            // Serialize the partially signed transaction
+            const serializedUserSignedTx = Buffer.from(versionedTransaction.serialize()).toString('base64');
+
+            // Send to backend for fee payer signature and broadcasting
+            const sponsorResult = await sponsorEscrowTransfer({
+              rewardId: result.rewards[0].id, // Use first reward ID for sponsorship
+              transaction: serializedUserSignedTx
+            });
+
+            if (!sponsorResult.success) {
+              throw new Error(sponsorResult.error || 'Failed to sponsor escrow transfer');
+            }
+
+            console.log('Escrow transfer successful (sponsored):', sponsorResult.signature);
+          } catch (escrowError) {
+            console.error('Escrow transfer failed:', escrowError);
+            setRewardError(`Reward links duplicated but escrow transfer failed: ${escrowError instanceof Error ? escrowError.message : 'Unknown error'}`);
+            // Don't fail the entire operation, just show warning
+          }
+        }
+
         const createdLinks = result.rewards.map(reward => `${window.location.origin}/reward/${reward.slug}`);
         setCreatedRewardLink(createdLinks.join('\n'));
         // Refresh reward links list
@@ -1111,7 +1292,7 @@ export default function VoucherCollectionDetailPage() {
                       <div className="flex items-start gap-2">
                         <div className="w-4 h-4 mt-0.5 text-blue-400">ℹ️</div>
                         <div className="text-xs text-blue-300">
-                          Token amount will be debited from your account and deposited into an escrow, then released upon reward claim.
+                          Token amount will be debited from your account and transferred to the voucher.
                         </div>
                       </div>
                     </div>
@@ -1831,8 +2012,11 @@ export default function VoucherCollectionDetailPage() {
                               setModalVoucherId(voucher.id);
                               setModalType('redeem');
                               setShowModal(true);
-                              setRedeemAmount(''); // Start with empty amount for user input
                               setModalError(null);
+                              // Set redeem amount after a small delay to ensure modal is rendered
+                              setTimeout(() => {
+                                setRedeemAmount(voucher.value ? voucher.value.toString() : '');
+                              }, 100);
                             }}
                             disabled={operatingVoucherId === voucher.id}
                             className="px-3 py-1 bg-green-600/20 hover:bg-green-600/30 border border-green-600/30 rounded text-green-400 text-xs disabled:opacity-50"
@@ -1980,12 +2164,12 @@ export default function VoucherCollectionDetailPage() {
                         type="number"
                         step="0.01"
                         value={redeemAmount}
-                        onChange={(e) => setRedeemAmount(e.target.value)}
-                        placeholder="Enter amount to redeem"
-                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                        readOnly
+                        placeholder="Redemption amount"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm cursor-not-allowed"
                       />
                       <div className="text-xs text-white/60 mt-1">
-                        Voucher value: {collection?.vouchers.find(v => v.id === modalVoucherId)?.value?.toLocaleString()} {collection?.vouchers.find(v => v.id === modalVoucherId)?.symbol || 'USD'}
+                        Voucher value: {collection?.vouchers.find(v => v.id === modalVoucherId)?.value?.toLocaleString()} {collection?.vouchers.find(v => v.id === modalVoucherId)?.symbol || 'USDC'}
                       </div>
                     </div>
                   </>
@@ -2093,7 +2277,7 @@ export default function VoucherCollectionDetailPage() {
                 <div className="p-3 bg-white/5 rounded-lg border border-white/10">
                   <div className="text-white text-sm mb-2">Duplicating:</div>
                   <div className="text-white font-medium">{selectedRewardToDuplicate.voucherType}</div>
-                  <div className="text-white/60 text-xs">Value: ${selectedRewardToDuplicate.voucherWorth}</div>
+                  <div className="text-white/60 text-xs">Value: {selectedRewardToDuplicate.voucherWorth?.toLocaleString()} {selectedRewardToDuplicate.symbol}</div>
                 </div>
 
                 <div>
