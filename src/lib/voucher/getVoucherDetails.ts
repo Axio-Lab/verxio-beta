@@ -12,6 +12,8 @@ export interface VoucherDetails {
     merchantId: string;
     status: string;
     conditions?: string;
+    valueSymbol?: string;
+    [key: string]: any;
   };
   creator: string;
   owner: string;
@@ -76,6 +78,9 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
     const merchantIdAttr = attributes.find((attr: any) => attr.trait_type === 'Merchant ID');
     const statusAttr = attributes.find((attr: any) => attr.trait_type === 'Status');
     const conditionsAttr = attributes.find((attr: any) => attr.trait_type === 'Conditions' || attr.trait_type === 'conditions');
+    const assetNameAttr = attributes.find((attr: any) => attr.trait_type === 'Asset Name');
+    const assetSymbolAttr = attributes.find((attr: any) => attr.trait_type === 'Asset Symbol');
+    const tokenAddressAttr = attributes.find((attr: any) => attr.trait_type === 'Token Address');
 
     // Extract collection ID from grouping
     const collectionGrouping = asset.grouping?.find((group: any) => group.group_key === 'collection');
@@ -110,7 +115,11 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
         expiryDate: expiryDateAttr?.value || '',
         merchantId: merchantIdAttr?.value || '',
         status: statusAttr?.value || 'Active',
-        conditions: conditionsAttr?.value || ''
+        conditions: conditionsAttr?.value || '',
+        valueSymbol: assetSymbolAttr?.value || '',
+        'Asset Name': assetNameAttr?.value || '',
+        'Asset Symbol': assetSymbolAttr?.value || '',
+        'Token Address': tokenAddressAttr?.value || ''
       },
       creator: asset.ownership?.owner || '',
       owner: asset.ownership?.owner || '',
