@@ -7,7 +7,10 @@
     "build": "npx prisma generate && next build",
     "start": "npx prisma migrate deploy && next start",
     "lint": "next lint",
-    "postinstall": "npx prisma generate"
+    "postinstall": "npx prisma generate",
+    "db:push": "npx prisma db push",
+    "db:migrate": "npx prisma migrate deploy",
+    "postdeploy": "npx prisma generate && npx prisma db push"
   },
   "dependencies": {
     "@metaplex-foundation/umi": "^1.2.0",

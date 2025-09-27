@@ -12,7 +12,11 @@ export interface CreateRewardLinkData {
   voucherType: string
   name?: string
   description?: string
-  value?: number
+  voucherWorth?: number
+  valueSymbol?: string
+  assetName?: string
+  assetSymbol?: string
+  tokenAddress?: string
   maxUses?: number
   expiryDate?: Date
   transferable?: boolean
@@ -29,7 +33,11 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
       voucherType,
       name,
       description,
-      value,
+      voucherWorth,
+      valueSymbol,
+      assetName,
+      assetSymbol,
+      tokenAddress,
       maxUses,
       expiryDate,
       transferable = false,
@@ -92,7 +100,10 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
           ...(expiryDate ? [{ trait_type: 'Expiry Date', value: expiryDate.toISOString() }] : []),
           { trait_type: 'Status', value: 'Active' },
           { trait_type: 'Merchant ID',value: creatorAddress },
-          ...(conditions ? [{ trait_type: 'Conditions', value: conditions }] : [])
+          ...(conditions ? [{ trait_type: 'Conditions', value: conditions }] : []),
+          ...(assetName ? [{ trait_type: 'Asset Name', value: assetName }] : []),
+          ...(assetSymbol ? [{ trait_type: 'Asset Symbol', value: assetSymbol }] : []),
+          ...(tokenAddress ? [{ trait_type: 'Token Address', value: tokenAddress }] : [])
         ]
       }
       const stored = await storeMetadata(metadata as any)
@@ -110,13 +121,15 @@ export const createRewardLink = async (data: CreateRewardLinkData) => {
         voucherType,
         name: (name || collectionName) || null,
         description: (description || collectionDescription) || null,
-        value: value ?? null,
+        voucherWorth: voucherWorth ?? null,
         maxUses: typeof maxUses === 'number' ? maxUses : null,
         expiryDate: expiryDate || null,
         transferable,
         conditions: conditions || null,
         imageUri: imageUri || null,
-        metadataUri: finalMetadataUri || null
+        metadataUri: finalMetadataUri || null,
+        symbol: assetSymbol || valueSymbol || null,
+        tokenAddress: tokenAddress || null
       }
     })
 
@@ -178,7 +191,7 @@ export const claimRewardLink = async (
       recipient,
       voucherName: reward.name,
       voucherType: reward.voucherType,
-      value: reward.value,
+      value: reward.voucherWorth,
       description: reward.description,
       expiryDate: reward.expiryDate,
       maxUses: reward.maxUses,
@@ -241,7 +254,11 @@ export interface BulkCreateRewardLinksData {
   voucherType: string
   name?: string
   description?: string
-  value?: number
+  voucherWorth?: number
+  valueSymbol?: string
+  assetName?: string
+  assetSymbol?: string
+  tokenAddress?: string
   maxUses?: number
   expiryDate?: Date
   transferable?: boolean
@@ -259,7 +276,11 @@ export const bulkCreateRewardLinks = async (data: BulkCreateRewardLinksData) => 
       voucherType,
       name,
       description,
-      value,
+      voucherWorth,
+      valueSymbol,
+      assetName,
+      assetSymbol,
+      tokenAddress,
       maxUses,
       expiryDate,
       transferable = false,
@@ -324,7 +345,10 @@ export const bulkCreateRewardLinks = async (data: BulkCreateRewardLinksData) => 
           ...(expiryDate ? [{ trait_type: 'Expiry Date', value: expiryDate.toISOString() }] : []),
           { trait_type: 'Status', value: 'Active' },
           { trait_type: 'Merchant ID', value: creatorAddress },
-          ...(conditions ? [{ trait_type: 'Conditions', value: conditions }] : [])
+          ...(conditions ? [{ trait_type: 'Conditions', value: conditions }] : []),
+          ...(assetName ? [{ trait_type: 'Asset Name', value: assetName }] : []),
+          ...(assetSymbol ? [{ trait_type: 'Asset Symbol', value: assetSymbol }] : []),
+          ...(tokenAddress ? [{ trait_type: 'Token Address', value: tokenAddress }] : [])
         ]
       }
       const stored = await storeMetadata(metadata as any)
@@ -345,13 +369,15 @@ export const bulkCreateRewardLinks = async (data: BulkCreateRewardLinksData) => 
           voucherType,
           name: (name || collectionName) || null,
           description: (description || collectionDescription) || null,
-          value: value ?? null,
+          voucherWorth: voucherWorth ?? null,
           maxUses: typeof maxUses === 'number' ? maxUses : null,
           expiryDate: expiryDate || null,
           transferable,
           conditions: conditions || null,
           imageUri: imageUri || null,
-          metadataUri: finalMetadataUri || null
+          metadataUri: finalMetadataUri || null,
+          symbol: assetSymbol || valueSymbol || null,
+          tokenAddress: tokenAddress || null
         }
       })
 
@@ -435,13 +461,15 @@ export const duplicateRewardLinks = async (data: DuplicateRewardLinksData) => {
           voucherType: originalReward.voucherType,
           name: originalReward.name,
           description: originalReward.description,
-          value: originalReward.value,
+          voucherWorth: originalReward.voucherWorth,
           maxUses: originalReward.maxUses,
           expiryDate: originalReward.expiryDate,
           transferable: originalReward.transferable,
           conditions: originalReward.conditions,
           imageUri: originalReward.imageUri,
-          metadataUri: originalReward.metadataUri
+          metadataUri: originalReward.metadataUri,
+          symbol: originalReward.symbol,
+          tokenAddress: originalReward.tokenAddress
         }
       })
 

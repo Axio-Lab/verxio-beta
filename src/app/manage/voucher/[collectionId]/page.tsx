@@ -67,6 +67,7 @@ interface VoucherCollection {
     voucherName: string;
     voucherType: string;
     value: number;
+    symbol: string;
     description: string;
     expiryDate: string;
     maxUses: number;
@@ -99,11 +100,18 @@ export default function VoucherCollectionDetailPage() {
     recipient: '',
     voucherType: '',
     value: '',
+    valueSymbol: 'USDC',
+    assetName: '',
+    assetSymbol: '',
     expiryDate: '',
     maxUses: '1',
     transferable: false,
     conditions: ''
   });
+  const [tokenSelection, setTokenSelection] = useState('usdc');
+  const [customTokenAddress, setCustomTokenAddress] = useState('');
+  const [rewardTokenSelection, setRewardTokenSelection] = useState('usdc');
+  const [rewardCustomTokenAddress, setRewardCustomTokenAddress] = useState('');
   const [recipientWalletAddress, setRecipientWalletAddress] = useState<string | null>(null);
   const [isMinting, setIsMinting] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
@@ -136,7 +144,10 @@ export default function VoucherCollectionDetailPage() {
   const [rewardData, setRewardData] = useState({
     voucherType: '',
     customVoucherType: '',
-    value: '',
+    voucherWorth: '',
+    valueSymbol: 'USDC',
+    assetName: '',
+    assetSymbol: '',
     maxUses: '1',
     expiryDate: '',
     transferable: false,
@@ -164,6 +175,25 @@ export default function VoucherCollectionDetailPage() {
   const [showRewardLinks, setShowRewardLinks] = useState(false);
   const [showVouchers, setShowVouchers] = useState(false);
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(false);
+
+  // Fetch USDC mint address from config
+  const [usdcMintAddress, setUsdcMintAddress] = useState<string>('');
+
+  // Fetch USDC config on component mount
+  useEffect(() => {
+    const fetchUsdcConfig = async () => {
+      try {
+        const { getVerxioConfig } = await import('@/app/actions/loyalty');
+        const config = await getVerxioConfig();
+        if (config.usdcMint) {
+          setUsdcMintAddress(config.usdcMint);
+        }
+      } catch (error) {
+        console.error('Error fetching USDC config:', error);
+      }
+    };
+    fetchUsdcConfig();
+  }, []);
 
   // Calculate pagination for vouchers
   const totalVouchers = collection?.vouchers.length || 0;
@@ -338,7 +368,22 @@ export default function VoucherCollectionDetailPage() {
               trait_type: 'Conditions',
               value: formatConditionString(mintData.conditions),
             },
-
+            ...(mintData.assetName ? [{
+              trait_type: 'Asset Name',
+              value: mintData.assetName,
+            }] : []),
+            ...(mintData.assetSymbol ? [{
+              trait_type: 'Asset Symbol',
+              value: mintData.assetSymbol,
+            }] : []),
+            ...((mintData.voucherType === 'TOKEN' && tokenSelection === 'custom_token' && customTokenAddress) ? [{
+              trait_type: 'Token Address',
+              value: customTokenAddress,
+            }] : []),
+            ...((mintData.voucherType === 'TOKEN' && tokenSelection === 'usdc' && usdcMintAddress) ? [{
+              trait_type: 'Token Address',
+              value: usdcMintAddress,
+            }] : []),
           ],
         };
 
@@ -358,6 +403,10 @@ export default function VoucherCollectionDetailPage() {
         voucherName,
         voucherType: mintData.voucherType as MintVoucherData['voucherType'],
         value: parseFloat(mintData.value),
+        valueSymbol: mintData.valueSymbol,
+        assetName: mintData.assetName,
+        assetSymbol: mintData.assetSymbol,
+        tokenAddress: mintData.voucherType === 'TOKEN' && tokenSelection === 'custom_token' ? customTokenAddress : (mintData.voucherType === 'TOKEN' && tokenSelection === 'usdc' ? usdcMintAddress : undefined),
         description,
         expiryDate: calculatedExpiryDate,
         maxUses: parseInt(mintData.maxUses),
@@ -380,10 +429,15 @@ export default function VoucherCollectionDetailPage() {
         setUploadedImage(null);
         setUploadedImageFile(null);
         setRecipientWalletAddress(null);
+        setTokenSelection('usdc');
+        setCustomTokenAddress('');
         setMintData({
           recipient: '',
           voucherType: '',
           value: '',
+          valueSymbol: 'USDC',
+          assetName: '',
+          assetSymbol: '',
           expiryDate: '',
           maxUses: '1',
           transferable: true,
@@ -536,7 +590,11 @@ export default function VoucherCollectionDetailPage() {
           creatorAddress: user.wallet.address,
           collectionId: collection.id,
           voucherType: rewardData.voucherType === 'CUSTOM_REWARD' ? rewardData.customVoucherType : rewardData.voucherType,
-          value: parseFloat(rewardData.value),
+          voucherWorth: parseFloat(rewardData.voucherWorth),
+          valueSymbol: rewardData.valueSymbol,
+          assetName: rewardData.assetName,
+          assetSymbol: rewardData.assetSymbol,
+          tokenAddress: rewardData.voucherType === 'TOKEN' && rewardTokenSelection === 'custom_token' ? rewardCustomTokenAddress : (rewardData.voucherType === 'TOKEN' && rewardTokenSelection === 'usdc' ? usdcMintAddress : undefined),
           maxUses: parseInt(rewardData.maxUses),
           expiryDate: rewardData.expiryDate ? new Date(rewardData.expiryDate) : undefined,
           transferable: rewardData.transferable,
@@ -553,7 +611,10 @@ export default function VoucherCollectionDetailPage() {
           setRewardData({
             voucherType: '',
             customVoucherType: '',
-            value: '',
+            voucherWorth: '',
+            valueSymbol: 'USDC',
+            assetName: '',
+            assetSymbol: '',
             maxUses: '1',
             expiryDate: '',
             transferable: false,
@@ -562,6 +623,8 @@ export default function VoucherCollectionDetailPage() {
           });
           setRewardImageFile(null);
           setRewardImagePreview(null);
+          setRewardTokenSelection('usdc');
+          setRewardCustomTokenAddress('');
           setShowRewardForm(false);
           setRewardError(null);
         } else {
@@ -576,7 +639,11 @@ export default function VoucherCollectionDetailPage() {
           creatorAddress: user.wallet.address,
           collectionId: collection.id,
           voucherType: rewardData.voucherType === 'CUSTOM_REWARD' ? rewardData.customVoucherType : rewardData.voucherType,
-          value: parseFloat(rewardData.value),
+          voucherWorth: parseFloat(rewardData.voucherWorth),
+          valueSymbol: rewardData.valueSymbol,
+          assetName: rewardData.assetName,
+          assetSymbol: rewardData.assetSymbol,
+          tokenAddress: rewardData.voucherType === 'TOKEN' && rewardTokenSelection === 'custom_token' ? rewardCustomTokenAddress : (rewardData.voucherType === 'TOKEN' && rewardTokenSelection === 'usdc' ? usdcMintAddress : undefined),
           maxUses: parseInt(rewardData.maxUses),
           expiryDate: rewardData.expiryDate ? new Date(rewardData.expiryDate) : undefined,
           transferable: rewardData.transferable,
@@ -598,7 +665,10 @@ export default function VoucherCollectionDetailPage() {
           setRewardData({
             voucherType: '',
             customVoucherType: '',
-            value: '',
+            voucherWorth: '',
+            valueSymbol: 'USDC',
+            assetName: '',
+            assetSymbol: '',
             maxUses: '1',
             expiryDate: '',
             transferable: false,
@@ -607,6 +677,8 @@ export default function VoucherCollectionDetailPage() {
           });
           setRewardImageFile(null);
           setRewardImagePreview(null);
+          setRewardTokenSelection('usdc');
+          setRewardCustomTokenAddress('');
           setShowRewardForm(false);
           setRewardError(null);
         } else {
@@ -760,7 +832,7 @@ export default function VoucherCollectionDetailPage() {
             </div>
             <div className="text-sm font-medium text-white">Active Vouchers</div>
             <div className="text-xl font-bold text-blue-400">
-              {collection.vouchers.filter(v => v.status === 'active').length}
+              {collection.vouchers.filter(v => v.status === 'active' && !v.isExpired).length}
             </div>
           </div>
           <div className="p-4 bg-gradient-to-br from-white/8 to-white/3 border border-white/15 rounded-lg text-left backdrop-blur-sm">
@@ -850,6 +922,7 @@ export default function VoucherCollectionDetailPage() {
               <AppButton
                 onClick={() => {
                   setShowMintForm(true);
+                  setShowRewardForm(false); // Close reward form when opening mint form
                   setMintingError(null); // Clear minting errors when opening form
                 }}
                 className="w-full"
@@ -924,30 +997,163 @@ export default function VoucherCollectionDetailPage() {
                   <Label className="text-white text-sm mb-1 block">Voucher Type</Label>
                   <CustomSelect
                     value={mintData.voucherType}
-                    onChange={(value: string) => setMintData({ ...mintData, voucherType: value as any })}
-                    options={collection?.blockchainDetails?.metadata?.voucherTypes?.map((type: string) => ({
-                      value: type.toUpperCase().replace(' ', '_'),
-                      label: type
-                    }))}
+                    onChange={(value: string) => {
+                      const newVoucherType = value as any;
+                      if (newVoucherType === 'TOKEN') {
+                        // Set USDC as default for TOKEN
+                        setMintData({ 
+                          ...mintData, 
+                          voucherType: newVoucherType,
+                          assetName: 'USD Coin',
+                          assetSymbol: 'USDC'
+                        });
+                        setTokenSelection('usdc');
+                        setCustomTokenAddress('');
+                      } else if (newVoucherType === 'FIAT') {
+                        // Clear asset fields for FIAT (user will fill them)
+                        setMintData({ 
+                          ...mintData, 
+                          voucherType: newVoucherType,
+                          assetName: '',
+                          assetSymbol: ''
+                        });
+                      } else {
+                        // For other voucher types, use USDC as default
+                        setMintData({ 
+                          ...mintData, 
+                          voucherType: newVoucherType,
+                          assetName: 'USD Coin',
+                          assetSymbol: 'USDC'
+                        });
+                      }
+                    }}
+                    options={[
+                      ...(collection?.blockchainDetails?.metadata?.voucherTypes?.map((type: string) => ({
+                        value: type.toUpperCase().replace(' ', '_'),
+                        label: type
+                      })) || []),
+                      { value: 'TOKEN', label: 'Token' },
+                      // { value: 'LOYALTY_COIN', label: 'Loyalty Coin' },
+                      { value: 'FIAT', label: 'Fiat' }
+                    ]}
                     className="bg-black/20 border-white/20 text-white text-sm"
                   />
                 </div>
-                {/* Voucher Worth */}
-                <div>
-                  <Label className="text-white text-sm mb-1 block">Voucher Worth</Label>
-                  <div className="relative">
+
+                {/* Token Selection for Token type */}
+                {mintData.voucherType === 'TOKEN' && (
+                  <>
+                    <div>
+                      <Label className="text-white text-sm mb-1 block">Token Selection</Label>
+                      <CustomSelect
+                        value={tokenSelection}
+                        onChange={(value: string) => {
+                          setTokenSelection(value);
+                          if (value === 'usdc') {
+                            setMintData({ 
+                              ...mintData, 
+                              assetName: 'USD Coin',
+                              assetSymbol: 'USDC'
+                            });
+                            setCustomTokenAddress('');
+                          } else if (value === 'custom_token') {
+                            // Clear the USDC values when switching to custom token
+                            setMintData({ 
+                              ...mintData, 
+                              assetName: '',
+                              assetSymbol: ''
+                            });
+                          }
+                        }}
+                        options={[
+                          { value: 'usdc', label: 'USDC' },
+                          { value: 'custom_token', label: 'Custom Token' }
+                        ]}
+                        className="bg-black/20 border-white/20 text-white text-sm"
+                      />
+                    </div>
+
+                    {/* Custom Token fields */}
+                    {tokenSelection === 'custom_token' && (
+                      <>
+                        <div>
+                          <Label className="text-white text-sm mb-1 block">Token Address</Label>
+                          <Input
+                            value={customTokenAddress}
+                            onChange={(e) => setCustomTokenAddress(e.target.value)}
+                            placeholder="Enter token contract address"
+                            className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white text-sm mb-1 block">Token Name</Label>
+                          <Input
+                            value={mintData.assetName}
+                            onChange={(e) => setMintData({ ...mintData, assetName: e.target.value })}
+                            placeholder="e.g., Bitcoin, Ethereum, Custom Token"
+                            className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white text-sm mb-1 block">Token Symbol</Label>
+                          <Input
+                            value={mintData.assetSymbol}
+                            onChange={(e) => setMintData({ ...mintData, assetSymbol: e.target.value.toUpperCase() })}
+                            placeholder="e.g., BTC, ETH, CUSTOM"
+                            className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Token Information */}
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <div className="w-4 h-4 mt-0.5 text-blue-400">ℹ️</div>
+                        <div className="text-xs text-blue-300">
+                          Token amount will be debited from your account and deposited into an escrow, then released upon reward claim.
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Asset Name and Symbol fields for Fiat */}
+                {mintData.voucherType === 'FIAT' && (
+                  <>
+                    <div>
+                      <Label className="text-white text-sm mb-1 block">Asset Name</Label>
+                      <Input
+                        value={mintData.assetName}
+                        onChange={(e) => setMintData({ ...mintData, assetName: e.target.value })}
+                        placeholder="e.g., Bitcoin, Ethereum, Gold, Silver"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-white text-sm mb-1 block">Asset Symbol</Label>
+                      <Input
+                        value={mintData.assetSymbol}
+                        onChange={(e) => setMintData({ ...mintData, assetSymbol: e.target.value.toUpperCase() })}
+                        placeholder="e.g., BTC, ETH, GOLD, SILVER"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
+                {/* Value + Max Uses side by side */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-white text-sm mb-1 block">Voucher Worth</Label>
                     <Input
                       type="number"
                       step="0.01"
                       value={mintData.value}
                       onChange={(e) => setMintData({ ...mintData, value: e.target.value })}
                       placeholder="0.00"
-                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm pr-12"
+                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/60">USD</span>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-white text-sm mb-1 block">Max Uses</Label>
                     <Input
@@ -959,15 +1165,15 @@ export default function VoucherCollectionDetailPage() {
                       className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                     />
                   </div>
-                  <div>
-                    <Label className="text-white text-sm mb-1 block">Expiry Date</Label>
-                    <Input
-                      type="date"
-                      value={mintData.expiryDate}
-                      onChange={(e) => setMintData({ ...mintData, expiryDate: e.target.value })}
-                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
-                    />
-                  </div>
+                </div>
+                <div>
+                  <Label className="text-white text-sm mb-1 block">Expiry Date</Label>
+                  <Input
+                    type="date"
+                    value={mintData.expiryDate}
+                    onChange={(e) => setMintData({ ...mintData, expiryDate: e.target.value })}
+                    className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                  />
                 </div>
                 <div>
                   <Label className="text-white text-sm mb-1 block">Conditions (Optional)</Label>
@@ -1006,7 +1212,8 @@ export default function VoucherCollectionDetailPage() {
                       !recipientWalletAddress ||
                       !mintData.voucherType ||
                       !mintData.expiryDate ||
-                      !uploadedImageFile
+                      !uploadedImageFile ||
+                      (mintData.voucherType === 'TOKEN' && tokenSelection === 'custom_token' && !customTokenAddress)
                     }
                     className="flex-1"
                   >
@@ -1047,6 +1254,7 @@ export default function VoucherCollectionDetailPage() {
               <AppButton
                 onClick={() => {
                   setShowRewardForm(true);
+                  setShowMintForm(false); // Close mint form when opening reward form
                   setRewardError(null);
                 }}
                 className="w-full"
@@ -1107,17 +1315,151 @@ export default function VoucherCollectionDetailPage() {
                   <Label className="text-white text-sm mb-1 block">Voucher Type</Label>
                   <CustomSelect
                     value={rewardData.voucherType}
-                    onChange={(value) => setRewardData({ ...rewardData, voucherType: value })}
+                    onChange={(value) => {
+                      const newVoucherType = value;
+                      if (newVoucherType === 'TOKEN') {
+                        // Set USDC as default for TOKEN
+                        setRewardData({ 
+                          ...rewardData, 
+                          voucherType: newVoucherType,
+                          assetName: 'USD Coin',
+                          assetSymbol: 'USDC'
+                        });
+                        setRewardTokenSelection('usdc');
+                        setRewardCustomTokenAddress('');
+                      } else if (newVoucherType === 'FIAT') {
+                        // Clear asset fields for FIAT (user will fill them)
+                        setRewardData({ 
+                          ...rewardData, 
+                          voucherType: newVoucherType,
+                          assetName: '',
+                          assetSymbol: ''
+                        });
+                      } else {
+                        // For other voucher types, use USDC as default
+                        setRewardData({ 
+                          ...rewardData, 
+                          voucherType: newVoucherType,
+                          assetName: 'USD Coin',
+                          assetSymbol: 'USDC'
+                        });
+                      }
+                    }}
                     options={[
                       ...(collection?.blockchainDetails?.metadata?.voucherTypes?.map((type: string) => ({
                         value: type.toUpperCase().replace(' ', '_'),
                         label: type
                       })) || []),
-                      { value: 'CUSTOM_REWARD', label: 'Select Custom Reward' },
+                      { value: 'TOKEN', label: 'Token' },
+                      // { value: 'LOYALTY_COIN', label: 'Loyalty Coin' },
+                      { value: 'FIAT', label: 'Fiat' },
+                      { value: 'CUSTOM_REWARD', label: 'Select Custom Reward' }
                     ]}
                     className="bg-black/20 border-white/20 text-white"
                   />
                 </div>
+
+                {/* Token Selection for Token type */}
+                {rewardData.voucherType === 'TOKEN' && (
+                  <>
+                    <div>
+                      <Label className="text-white text-sm mb-1 block">Token Selection</Label>
+                      <CustomSelect
+                        value={rewardTokenSelection}
+                        onChange={(value: string) => {
+                          setRewardTokenSelection(value);
+                          if (value === 'usdc') {
+                            setRewardData({ 
+                              ...rewardData, 
+                              assetName: 'USD Coin',
+                              assetSymbol: 'USDC'
+                            });
+                            setRewardCustomTokenAddress('');
+                          } else if (value === 'custom_token') {
+                            // Clear the USDC values when switching to custom token
+                            setRewardData({ 
+                              ...rewardData, 
+                              assetName: '',
+                              assetSymbol: ''
+                            });
+                          }
+                        }}
+                        options={[
+                          { value: 'usdc', label: 'USDC' },
+                          { value: 'custom_token', label: 'Custom Token' }
+                        ]}
+                        className="bg-black/20 border-white/20 text-white text-sm"
+                      />
+                    </div>
+
+                    {/* Custom Token fields */}
+                    {rewardTokenSelection === 'custom_token' && (
+                      <>
+                        <div>
+                          <Label className="text-white text-sm mb-1 block">Token Address</Label>
+                          <Input
+                            value={rewardCustomTokenAddress}
+                            onChange={(e) => setRewardCustomTokenAddress(e.target.value)}
+                            placeholder="Enter token contract address"
+                            className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white text-sm mb-1 block">Token Name</Label>
+                          <Input
+                            value={rewardData.assetName}
+                            onChange={(e) => setRewardData({ ...rewardData, assetName: e.target.value })}
+                            placeholder="e.g., Bitcoin, Ethereum, Custom Token"
+                            className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white text-sm mb-1 block">Token Symbol</Label>
+                          <Input
+                            value={rewardData.assetSymbol}
+                            onChange={(e) => setRewardData({ ...rewardData, assetSymbol: e.target.value.toUpperCase() })}
+                            placeholder="e.g., BTC, ETH, CUSTOM"
+                            className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Token Information */}
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <div className="w-4 h-4 mt-0.5 text-blue-400">ℹ️</div>
+                        <div className="text-xs text-blue-300">
+                          Token amount will be debited from your account and deposited into an escrow, then released upon reward claim.
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Asset Name and Symbol fields for Fiat */}
+                {rewardData.voucherType === 'FIAT' && (
+                  <>
+                    <div>
+                      <Label className="text-white text-sm mb-1 block">Asset Name</Label>
+                      <Input
+                        value={rewardData.assetName}
+                        onChange={(e) => setRewardData({ ...rewardData, assetName: e.target.value })}
+                        placeholder="e.g., Bitcoin, Ethereum, Gold, Silver"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-white text-sm mb-1 block">Asset Symbol</Label>
+                      <Input
+                        value={rewardData.assetSymbol}
+                        onChange={(e) => setRewardData({ ...rewardData, assetSymbol: e.target.value.toUpperCase() })}
+                        placeholder="e.g., BTC, ETH, GOLD, SILVER"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
 
                 {/* Custom type input when Custom Reward selected */}
                 {rewardData.voucherType === 'CUSTOM_REWARD' && (
@@ -1139,17 +1481,16 @@ export default function VoucherCollectionDetailPage() {
                 {/* Value + Max Uses side by side */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-white text-sm mb-1 block">Value (USD)</Label>
+                    <Label className="text-white text-sm mb-1 block">Voucher Worth</Label>
                     <div className="relative">
                       <Input
                         type="number"
                         step="0.01"
-                        value={rewardData.value}
-                        onChange={(e) => setRewardData({ ...rewardData, value: e.target.value })}
+                        value={rewardData.voucherWorth}
+                        onChange={(e) => setRewardData({ ...rewardData, voucherWorth: e.target.value })}
                         placeholder="0.00"
-                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm pr-12"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/60">USD</span>
                     </div>
                   </div>
                   <div>
@@ -1237,6 +1578,7 @@ export default function VoucherCollectionDetailPage() {
                     disabled={
                       !rewardData.voucherType ||
                       (rewardData.voucherType === 'CUSTOM_REWARD' && !rewardData.customVoucherType) ||
+                      (rewardData.voucherType === 'TOKEN' && rewardTokenSelection === 'custom_token' && !rewardCustomTokenAddress) ||
                       !rewardImageFile ||
                       isCreatingReward
                     }
@@ -1429,21 +1771,21 @@ export default function VoucherCollectionDetailPage() {
             ) : (
               <>
                 <div className="space-y-3">
-                  {currentVouchers.map((voucher) => (
-                    
+                  {currentVouchers.map((voucher) => {
+                    return (
                     <div key={voucher.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <span className="text-white font-medium">{voucher.voucherName}</span>
                         </div>
-                        <div className={`text-xs font-medium ${getStatusColor(voucher.status)}`}>
-                          {voucher.status.toUpperCase()}
+                        <div className={`text-xs font-medium ${getStatusColor(voucher.isExpired ? 'expired' : voucher.status)}`}>
+                          {voucher.isExpired ? 'EXPIRED' : voucher.status.toUpperCase()}
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
                         <div>Type: {voucher.voucherType.replace(/_/g, ' ')}</div>
-                        <div>Value: ${voucher.value}</div>
+                        <div>Value: {voucher.value?.toLocaleString()} {voucher.symbol || 'USDC'}</div>
                         <div>Uses: {voucher.currentUses}/{voucher.maxUses}</div>
                         <div>Expires: {new Date(voucher.expiryDate).toLocaleDateString()}</div>
                       </div>
@@ -1515,7 +1857,7 @@ export default function VoucherCollectionDetailPage() {
                           </button>
                         )}
 
-                        {voucher.status === 'active' && !voucher.isExpired && (
+                        {(voucher.status === 'active' || voucher.isExpired) && (
                           <button
                             onClick={() => {
                               setModalVoucherId(voucher.id);
@@ -1532,7 +1874,8 @@ export default function VoucherCollectionDetailPage() {
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
 
@@ -1735,7 +2078,7 @@ export default function VoucherCollectionDetailPage() {
                 <div className="p-3 bg-white/5 rounded-lg border border-white/10">
                   <div className="text-white text-sm mb-2">Duplicating:</div>
                   <div className="text-white font-medium">{selectedRewardToDuplicate.voucherType}</div>
-                  <div className="text-white/60 text-xs">Value: ${selectedRewardToDuplicate.value}</div>
+                  <div className="text-white/60 text-xs">Value: ${selectedRewardToDuplicate.voucherWorth}</div>
                 </div>
 
                 <div>

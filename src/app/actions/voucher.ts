@@ -373,6 +373,7 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
             voucherName: voucherDetails.success ? voucherDetails.data?.name : 'Unknown Voucher',
             voucherType: voucherDetails.success ? voucherDetails.data?.attributes?.voucherType : 'Unknown',
             value: voucherDetails.success ? voucherDetails.data?.voucherData?.value : 0,
+            symbol: voucherDetails.success ? voucherDetails.data?.attributes?.['Asset Symbol'] : 'USDC',
             description: voucherDetails.success ? voucherDetails.data?.description : '',
             expiryDate: voucherDetails.success ? new Date(voucherDetails.data?.voucherData?.expiryDate || 0).toISOString() : '',
             maxUses: voucherDetails.success ? voucherDetails.data?.voucherData?.maxUses : 1,
@@ -392,6 +393,7 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
             voucherName: 'Unknown Voucher',
             voucherType: 'Unknown',
             value: 0,
+            symbol: 'USDC',
             description: '',
             expiryDate: '',
             maxUses: 1,
@@ -433,8 +435,11 @@ export interface MintVoucherData {
   collectionId: string
   recipient: string
   voucherName: string
-  voucherType: 'PERCENTAGE_OFF' | 'FIXED_VERXIO_CREDITS' | 'FREE_ITEM' | 'BUY_ONE_GET_ONE' | 'CUSTOM_REWARD'
+  voucherType: 'PERCENTAGE_OFF' | 'FIXED_VERXIO_CREDITS' | 'FREE_ITEM' | 'BUY_ONE_GET_ONE' | 'CUSTOM_REWARD' | 'TOKEN' | 'LOYALTY_COIN' | 'FIAT'
   value: number
+  valueSymbol?: string
+  assetName?: string
+  assetSymbol?: string
   description: string
   expiryDate: Date
   maxUses: number

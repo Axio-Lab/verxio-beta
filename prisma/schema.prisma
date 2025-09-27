@@ -386,13 +386,15 @@ model RewardLink {
   voucherType  String
   name         String?
   description  String?
-  value        Float?
+  voucherWorth        Float?
   maxUses      Int?
   expiryDate   DateTime?
   transferable Boolean  @default(false)
   conditions   String?
   imageUri     String?
   metadataUri  String?
+  symbol       String?  // Add symbol column
+  tokenAddress String?  // Add token address column
   status       String   @default("active")
   voucherAddress String? // Store the voucher address when claimed
   createdAt    DateTime @default(now())
