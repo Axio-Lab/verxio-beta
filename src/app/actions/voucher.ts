@@ -685,7 +685,7 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
       redemptionAmount,
       redemptionDetails: {
         transactionId: `redeem_${voucherId}_${Date.now()}`,
-        totalAmount: redemptionAmount || 100 // Default redemption amount
+        totalAmount: redemptionAmount
       }
     })
  

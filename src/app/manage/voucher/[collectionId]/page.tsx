@@ -1831,7 +1831,7 @@ export default function VoucherCollectionDetailPage() {
                               setModalVoucherId(voucher.id);
                               setModalType('redeem');
                               setShowModal(true);
-                              setRedeemAmount('100'); // Set default amount
+                              setRedeemAmount(''); // Start with empty amount for user input
                               setModalError(null);
                             }}
                             disabled={operatingVoucherId === voucher.id}
@@ -1974,6 +1974,20 @@ export default function VoucherCollectionDetailPage() {
                         </span>
                       </div>
                     </div>
+                    <div>
+                      <Label className="text-white text-sm mb-2 block">Redemption Amount</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={redeemAmount}
+                        onChange={(e) => setRedeemAmount(e.target.value)}
+                        placeholder="Enter amount to redeem"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                      />
+                      <div className="text-xs text-white/60 mt-1">
+                        Voucher value: {collection?.vouchers.find(v => v.id === modalVoucherId)?.value?.toLocaleString()} {collection?.vouchers.find(v => v.id === modalVoucherId)?.symbol || 'USD'}
+                      </div>
+                    </div>
                   </>
                 )}
 
@@ -2046,6 +2060,7 @@ export default function VoucherCollectionDetailPage() {
                     }}
                     disabled={
                       (modalType === 'extend' && !newExpiryDate) ||
+                      (modalType === 'redeem' && (!redeemAmount || parseFloat(redeemAmount) <= 0)) ||
                       operationLoading
                     }
                     className="flex-1"

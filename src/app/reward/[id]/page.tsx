@@ -24,6 +24,8 @@ interface RewardDetails {
   name: string | null;
   description: string | null;
   value: number | null;
+  voucherWorth: number | null;
+  symbol: string | null;
   maxUses: number | null;
   expiryDate: Date | null;
   transferable: boolean;
@@ -436,11 +438,11 @@ export default function ClaimRewardPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {rewardDetails.value && (
+                  {rewardDetails.voucherWorth && (
                     <div className="flex justify-between items-center">
-                      <span className="text-white/60 text-sm">Value</span>
+                      <span className="text-white/60 text-sm">Voucher Worth</span>
                       <span className="text-white font-medium">
-                        ${rewardDetails.value.toFixed(2)}
+                        {rewardDetails.voucherWorth.toLocaleString()} {rewardDetails.symbol || 'USD'}
                       </span>
                     </div>
                   )}
