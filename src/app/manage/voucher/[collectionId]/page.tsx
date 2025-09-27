@@ -204,7 +204,11 @@ export default function VoucherCollectionDetailPage() {
   const totalPages = Math.ceil(totalVouchers / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const currentVouchers = collection?.vouchers.slice(startIndex, endIndex) || [];
+  // Sort vouchers by most recent first (createdAt descending)
+  const sortedVouchers = collection?.vouchers.sort((a, b) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  ) || [];
+  const currentVouchers = sortedVouchers.slice(startIndex, endIndex);
 
 
   const handlePageChange = (page: number) => {
@@ -623,6 +627,7 @@ export default function VoucherCollectionDetailPage() {
     }
   };
 
+
   const handleCreateRewardLink = async () => {
     if (!user?.wallet?.address || !collection || !rewardImageFile) return;
 
@@ -775,7 +780,8 @@ export default function VoucherCollectionDetailPage() {
               // Send to backend for fee payer signature and broadcasting
               const sponsorResult = await sponsorEscrowTransfer({
                 rewardId: result.rewards[0].id, // Use first reward ID for bulk transfers
-                transaction: serializedUserSignedTx
+                transaction: serializedUserSignedTx,
+                totalTokenAmount: result.totalTokenAmount // Pass total amount for bulk transfers
               });
 
               if (!sponsorResult.success) {
@@ -2041,6 +2047,7 @@ export default function VoucherCollectionDetailPage() {
                           </button>
                         )}
 
+
                         {(voucher.status === 'active' || voucher.isExpired) && (
                           <button
                             onClick={() => {
@@ -2205,6 +2212,7 @@ export default function VoucherCollectionDetailPage() {
                     </div>
                   </>
                 )}
+
 
                 {/* Modal Error Display */}
                 {modalError && (

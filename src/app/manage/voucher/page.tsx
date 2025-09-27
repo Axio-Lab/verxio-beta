@@ -7,8 +7,11 @@ import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { usePrivy } from '@privy-io/react-auth';
 import { getUserVoucherCollections, getUserVouchers } from '@/app/actions/voucher';
 import { useRouter } from 'next/navigation';
-import { Plus, Gift, ArrowLeft, Currency, ExternalLink } from 'lucide-react';
+import { Plus, Gift, ArrowLeft, Currency, ExternalLink, X } from 'lucide-react';
 import { AppButton } from '@/components/ui/app-button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 interface VoucherCollection {
   id: string;
@@ -50,6 +53,23 @@ export default function ManageVouchersPage() {
   const [showUserVouchers, setShowUserVouchers] = useState(false);
   const [userVouchersCurrentPage, setUserVouchersCurrentPage] = useState(1);
   const [userVouchersPageSize] = useState(5);
+  const [voucherStatusFilter, setVoucherStatusFilter] = useState<'active' | 'used' | 'expired' | 'all'>('active');
+  
+    // Withdraw modal states
+    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+    const [withdrawVoucher, setWithdrawVoucher] = useState<any>(null);
+    const [withdrawType, setWithdrawType] = useState<'verxio' | 'external'>('verxio');
+    const [withdrawRecipient, setWithdrawRecipient] = useState('');
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
+    const [voucherTokenBalance, setVoucherTokenBalance] = useState<number | null>(null);
+    const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+    
+    // Withdraw success states
+    const [showWithdrawSuccess, setShowWithdrawSuccess] = useState(false);
+    const [withdrawSignature, setWithdrawSignature] = useState<string>('');
+    const [withdrawAmountSuccess, setWithdrawAmountSuccess] = useState<number>(0);
+    const [withdrawSymbol, setWithdrawSymbol] = useState<string>('');
 
   // Collections dropdown state
   const [showCollections, setShowCollections] = useState(false);
@@ -89,7 +109,36 @@ export default function ManageVouchersPage() {
       const result = await getUserVouchers(user.wallet.address);
       
       if (result.success && result.vouchers) {
-        setUserVouchers(result.vouchers);
+        // Get detailed voucher information including symbol for each voucher
+        const { getVoucherDetails } = await import('@/lib/voucher/getVoucherDetails');
+        
+        const vouchersWithDetails = await Promise.all(
+          result.vouchers.map(async (voucher: any) => {
+            try {
+              const voucherDetails = await getVoucherDetails(voucher.voucherAddress);
+              if (voucherDetails.success && voucherDetails.data) {
+                return {
+                  ...voucher,
+                  symbol: voucherDetails.data.attributes?.['Asset Symbol'],
+                  tokenAddress: voucherDetails.data.attributes?.['Token Address']
+                };
+              }
+              
+              return {
+                ...voucher,
+                symbol: 'USDC' // fallback
+              };
+            } catch (error) {
+              console.error('Error fetching voucher details:', error);
+              return {
+                ...voucher,
+                symbol: 'USDC' // fallback
+              };
+            }
+          })
+        );
+        
+        setUserVouchers(vouchersWithDetails);
       }
     } catch (error) {
       console.error('Error loading user vouchers:', error);
@@ -98,12 +147,138 @@ export default function ManageVouchersPage() {
     }
   };
 
+  const fetchVoucherBalance = async (voucher: any) => {
+    if (!voucher.tokenAddress) {
+      console.log('No token address found for voucher');
+      setVoucherTokenBalance(null);
+      return;
+    }
+
+    setIsLoadingBalance(true);
+    try {
+      const { getVoucherTokenBalance } = await import('@/app/actions/withdraw');
+      const result = await getVoucherTokenBalance(voucher.voucherAddress, voucher.tokenAddress);
+      
+      if (result.success) {
+        setVoucherTokenBalance(result.balance!);
+      } else {
+        console.error('Failed to fetch token balance:', result.error);
+        setVoucherTokenBalance(null);
+      }
+    } catch (error) {
+      console.error('Error fetching voucher balance:', error);
+      setVoucherTokenBalance(null);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!user?.wallet?.address || !withdrawVoucher || !withdrawRecipient.trim() || !withdrawAmount.trim()) {
+      return;
+    }
+
+    const numAmount = parseFloat(withdrawAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return;
+    }
+
+    setIsWithdrawing(true);
+
+    try {
+      // Step 1: Validate withdrawal using backend action
+      const { withdrawTokens } = await import('@/app/actions/withdraw');
+      const result = await withdrawTokens({
+        voucherAddress: withdrawVoucher.voucherAddress,
+        withdrawType: withdrawType,
+        recipient: withdrawRecipient.trim(),
+        amount: numAmount,
+        senderWalletAddress: user.wallet.address
+      });
+
+      if (result.success && result.recipientWalletAddress) {
+        try {
+          // Step 2: Execute the withdraw transaction (backend handles signing with voucher key)
+          const { buildWithdrawTransaction } = await import('@/app/actions/withdraw');
+          const buildResult = await buildWithdrawTransaction({
+            voucherAddress: withdrawVoucher.voucherAddress,
+            recipientWallet: result.recipientWalletAddress,
+            amount: numAmount,
+            voucherId: result.voucherId!,
+            creatorAddress: user.wallet.address
+          });
+
+          if (!buildResult.success || !buildResult.transaction) {
+            throw new Error(buildResult.error || 'Failed to execute withdraw transaction');
+          }
+
+          // Update withdraw status with the transaction signature
+          const { updateWithdrawStatus } = await import('@/app/actions/withdraw');
+          const updateResult = await updateWithdrawStatus(result.withdrawId!, buildResult.transaction);
+
+          // Step 3: Show success popup
+          setShowWithdrawModal(false);
+          setWithdrawSignature(buildResult.transaction);
+          setWithdrawAmountSuccess(numAmount);
+          setWithdrawSymbol(withdrawVoucher.symbol || 'USDC');
+          setShowWithdrawSuccess(true);
+          
+          // Clear withdraw modal states
+          setWithdrawVoucher(null);
+          setWithdrawRecipient('');
+          setWithdrawAmount('');
+          setWithdrawType('verxio');
+          setVoucherTokenBalance(null);
+          setIsLoadingBalance(false);
+          
+          // Refresh vouchers to show updated status
+          await loadUserVouchers();
+
+        } catch (txError) {
+          console.error('Withdraw transaction failed:', txError);
+          
+          // Update withdraw status to FAILED if we have a withdrawId
+          if (result.withdrawId) {
+            try {
+              const { updateWithdrawStatusFailed } = await import('@/app/actions/withdraw');
+              await updateWithdrawStatusFailed(result.withdrawId, txError instanceof Error ? txError.message : 'Transaction failed');
+              console.log('Updated withdraw status to FAILED for ID:', result.withdrawId);
+            } catch (updateError) {
+              console.error('Failed to update withdraw status to failed:', updateError);
+            }
+          }
+          // Keep modal open to show error
+        }
+      } else {
+        console.error('Withdraw validation failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Error withdrawing tokens:', error);
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
   // User vouchers pagination calculations
-  const totalUserVouchers = userVouchers.length;
+  // Sort user vouchers by most recent first (createdAt descending)
+  const sortedUserVouchers = userVouchers.sort((a, b) => 
+    new Date(b.createdAt || b.voucherData?.createdAt || 0).getTime() - new Date(a.createdAt || a.voucherData?.createdAt || 0).getTime()
+  );
+  
+  // Filter vouchers by status
+  const filteredUserVouchers = sortedUserVouchers.filter(voucher => {
+    if (voucherStatusFilter === 'all') return true;
+    if (voucherStatusFilter === 'expired') return voucher.isExpired;
+    if (voucherStatusFilter === 'used') return voucher.voucherData?.status === 'used';
+    if (voucherStatusFilter === 'active') return voucher.voucherData?.status === 'active' && !voucher.isExpired;
+    return true;
+  });
+  
+  const totalUserVouchers = filteredUserVouchers.length;
   const totalUserVouchersPages = Math.ceil(totalUserVouchers / userVouchersPageSize) || 1;
   const userVouchersStartIndex = (userVouchersCurrentPage - 1) * userVouchersPageSize;
   const userVouchersEndIndex = userVouchersStartIndex + userVouchersPageSize;
-  const currentUserVouchers = userVouchers.slice(userVouchersStartIndex, userVouchersEndIndex);
+  const currentUserVouchers = filteredUserVouchers.slice(userVouchersStartIndex, userVouchersEndIndex);
 
   // Collections pagination calculations
   const totalCollections = collections.length;
@@ -184,11 +359,27 @@ export default function ManageVouchersPage() {
           >
             <CardTitle className="text-lg text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
-                My Vouchers ({userVouchers.length})
+                My Vouchers ({totalUserVouchers})
               </div>
-              <span className="text-sm text-gray-400">
-                {showUserVouchers ? '▼' : '▶'}
-              </span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={voucherStatusFilter}
+                  onChange={(e) => {
+                    setVoucherStatusFilter(e.target.value as 'active' | 'used' | 'expired' | 'all');
+                    setUserVouchersCurrentPage(1); // Reset to first page when filter changes
+                  }}
+                  className="bg-black/20 border border-white/20 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500"
+                  onClick={(e) => e.stopPropagation()} // Prevent card toggle when clicking select
+                >
+                  <option value="active">Active</option>
+                  <option value="used">Used</option>
+                  <option value="expired">Expired</option>
+                  <option value="all">All</option>
+                </select>
+                <span className="text-sm text-gray-400">
+                  {showUserVouchers ? '▼' : '▶'}
+                </span>
+              </div>
             </CardTitle>
           </CardHeader>
           {showUserVouchers && (
@@ -200,7 +391,7 @@ export default function ManageVouchersPage() {
                     <span className="text-gray-400 text-sm">Loading vouchers...</span>
                   </div>
                 </div>
-              ) : userVouchers.length > 0 ? (
+              ) : filteredUserVouchers.length > 0 ? (
                 <div className="space-y-3">
                   {currentUserVouchers.map((voucher, index) => (
                     <div key={voucher.voucherAddress || index} className="bg-gradient-to-br from-white/10 to-white/5 rounded-lg p-4 border border-white/20 hover:border-white/30 transition-all duration-300">
@@ -222,7 +413,7 @@ export default function ManageVouchersPage() {
                       {/* Voucher Details */}
                       <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
                         <div>Type: {voucher.voucherData?.type?.replace('_', ' ')}</div>
-                        <div>Value: ${voucher.voucherData?.value}</div>
+                        <div>Value: {voucher.voucherData?.value} {voucher.symbol }</div>
                         {!voucher.isExpired && (
                           <>
                             <div>Uses: {voucher.voucherData?.currentUses}/{voucher.voucherData?.maxUses}</div>
@@ -230,6 +421,35 @@ export default function ManageVouchersPage() {
                           </>
                         )}
                       </div>
+
+
+                      {/* Withdraw Button for TOKEN vouchers */}
+                      {voucher.voucherData?.type?.toLowerCase() === 'token' && 
+                       voucher.voucherData?.status === 'active' && 
+                       !voucher.isExpired && (
+                        <div className="mb-3">
+                          <button
+                            onClick={() => {
+                              setWithdrawVoucher(voucher);
+                              setWithdrawAmount(voucher.voucherData?.value?.toString() || '');
+                              setWithdrawRecipient('');
+                              setWithdrawType('verxio');
+                              setVoucherTokenBalance(null);
+                              setShowWithdrawModal(true);
+                              // Fetch actual token balance
+                              fetchVoucherBalance(voucher);
+                            }}
+                            disabled={!voucher.tokenAddress}
+                            className={`w-full px-3 py-2 border border-orange-600/30 text-xs font-medium transition-colors ${
+                              !voucher.tokenAddress 
+                                ? 'bg-gray-600/20 text-gray-400 cursor-not-allowed' 
+                                : 'bg-orange-600/20 hover:bg-orange-600/30 text-orange-400'
+                            }`}
+                          >
+                            {!voucher.tokenAddress ? 'Token Address Not Found' : 'Withdraw Tokens'}
+                          </button>
+                        </div>
+                      )}
 
                       {/* Expiry Info and Explorer Link */}
                       <div className="flex items-center justify-between mb-3">
@@ -286,7 +506,12 @@ export default function ManageVouchersPage() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center py-8">
-                  <span className="text-gray-400 text-sm">No vouchers found</span>
+                  <span className="text-gray-400 text-sm">
+                    {userVouchers.length === 0 
+                      ? 'No vouchers found' 
+                      : `No ${voucherStatusFilter} vouchers found`
+                    }
+                  </span>
                 </div>
               )}
             </CardContent>
@@ -371,6 +596,207 @@ export default function ManageVouchersPage() {
           )}
         </Card>
       </div>
+
+      {/* Withdraw Modal */}
+      {showWithdrawModal && withdrawVoucher && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold text-lg">Withdraw Tokens</h3>
+            </div>
+
+            <div className="space-y-4">
+              {/* Voucher Info */}
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <div className="text-blue-400 text-sm font-medium mb-1">Withdrawing from:</div>
+                <div className="text-white text-sm">
+                  {withdrawVoucher.name || `Voucher`} - {withdrawVoucher.voucherData?.value} {withdrawVoucher.symbol || 'USDC'}
+                </div>
+              </div>
+
+              {/* Withdraw Type Toggle */}
+              <div className="space-y-3">
+                <Label className="text-white text-sm font-medium">Withdraw To</Label>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={withdrawType === 'verxio'}
+                      onCheckedChange={(checked) => {
+                        setWithdrawType(checked ? 'verxio' : 'external');
+                        setWithdrawRecipient('');
+                      }}
+                    />
+                    <Label className="text-white text-sm">Verxio User</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={withdrawType === 'external'}
+                      onCheckedChange={(checked) => {
+                        setWithdrawType(checked ? 'external' : 'verxio');
+                        setWithdrawRecipient('');
+                      }}
+                    />
+                    <Label className="text-white text-sm">External Wallet</Label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recipient Field */}
+              <div className="space-y-2">
+                <Label htmlFor="withdraw-recipient" className="text-white text-sm font-medium">
+                  {withdrawType === 'verxio' ? 'Recipient Email' : 'Recipient Wallet Address'}
+                </Label>
+                <Input
+                  id="withdraw-recipient"
+                  type={withdrawType === 'verxio' ? 'email' : 'text'}
+                  value={withdrawRecipient}
+                  onChange={(e) => setWithdrawRecipient(e.target.value)}
+                  placeholder={withdrawType === 'verxio' ? 'Enter verxio user email address' : 'Enter Solana wallet address'}
+                  className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                />
+              </div>
+
+              {/* Amount Field */}
+              <div className="space-y-2">
+                <Label htmlFor="withdraw-amount" className="text-white text-sm font-medium">
+                  Amount to Withdraw ({withdrawVoucher.symbol})
+                </Label>
+                <Input
+                  id="withdraw-amount"
+                  type="number"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                  max={voucherTokenBalance !== null ? voucherTokenBalance : (withdrawVoucher.voucherData?.value || 0)}
+                  className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                />
+                <div className="text-xs text-white/60">
+                  {isLoadingBalance ? (
+                    <span>Loading balance...</span>
+                  ) : voucherTokenBalance !== null && (
+                    <span>Available: {voucherTokenBalance.toFixed(2)} {withdrawVoucher.symbol || 'USDC'}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                <div className="text-orange-400 text-sm font-medium mb-1">Warning</div>
+                <div className="text-orange-300 text-xs">
+                  This will withdraw tokens from the voucher and transfer them to the specified recipient. 
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <AppButton
+                  onClick={() => {
+                    setShowWithdrawModal(false);
+                    setWithdrawVoucher(null);
+                    setWithdrawRecipient('');
+                    setWithdrawAmount('');
+                    setWithdrawType('verxio');
+                    setVoucherTokenBalance(null);
+                    setIsLoadingBalance(false);
+                  }}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  Cancel
+                </AppButton>
+                <AppButton
+                  onClick={handleWithdraw}
+                  disabled={
+                    !withdrawRecipient.trim() || 
+                    !withdrawAmount.trim() || 
+                    parseFloat(withdrawAmount) <= 0 ||
+                    parseFloat(withdrawAmount) > (voucherTokenBalance !== null ? voucherTokenBalance : (withdrawVoucher.voucherData?.value || 0)) ||
+                    isWithdrawing ||
+                    (voucherTokenBalance !== null && voucherTokenBalance <= 0) ||
+                    isLoadingBalance
+                  }
+                  className="flex-1"
+                >
+                  {isWithdrawing ? (
+                    <div className="flex items-center gap-2">
+                      <VerxioLoaderWhite size="sm" />
+                      Withdrawing...
+                    </div>
+                  ) : isLoadingBalance ? (
+                    <div className="flex items-center gap-2">
+                      <VerxioLoaderWhite size="sm" />
+                      Loading Balance...
+                    </div>
+                  ) : (voucherTokenBalance !== null && voucherTokenBalance <= 0) ? (
+                    'Insufficient Balance'
+                  ) : (
+                    'Confirm Withdraw'
+                  )}
+                </AppButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Withdraw Success Modal */}
+      {showWithdrawSuccess && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white">Withdrawal Successful!</h3>
+              <p className="text-white/80">
+                Your tokens have been withdrawn successfully!
+              </p>
+
+              <div className="p-4 bg-black/20 rounded-lg border border-white/10">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-white">Amount:</span>
+                  <span className="text-white font-medium">{withdrawAmountSuccess.toFixed(2)} {withdrawSymbol}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-white">Transaction:</span>
+                  <span className="text-white font-mono text-sm truncate max-w-32">
+                    {withdrawSignature.slice(0, 8)}...{withdrawSignature.slice(-8)}
+                  </span>
+                </div>
+                <div className="flex justify-end">
+                  <a
+                    href={`https://solscan.io/tx/${withdrawSignature}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-[#00adef] text-sm hover:text-[#00adef]/80 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    View on Solscan
+                  </a>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowWithdrawSuccess(false);
+                  setWithdrawSignature('');
+                  setWithdrawAmountSuccess(0);
+                  setWithdrawSymbol('');
+                }}
+                className="w-full px-4 py-2 bg-white hover:bg-gray-100 text-black rounded-lg transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

@@ -439,6 +439,7 @@ export interface SponsorTokenTransferData {
 export interface SponsorEscrowTransferData {
   transaction: string
   rewardId: string
+  totalTokenAmount?: number // For bulk transfers
 }
 
 export const sponsorTokenTransfer = async (
@@ -589,7 +590,7 @@ export const sponsorEscrowTransfer = async (
   data: SponsorEscrowTransferData
 ): Promise<{ success: boolean; signature?: string; error?: string }> => {
   try {
-    const { transaction: serializedTransaction, rewardId } = data;
+    const { transaction: serializedTransaction, rewardId, totalTokenAmount } = data;
 
     if (!serializedTransaction || !rewardId) {
       return { success: false, error: 'Missing transaction data or reward ID' }
@@ -691,10 +692,13 @@ export const sponsorEscrowTransfer = async (
       });
 
       if (reward && reward.voucherType === 'TOKEN' && reward.tokenAddress) {
+        // For bulk transfers, record with the total amount, otherwise use individual reward amount
+        const transferAmount = totalTokenAmount || reward.voucherWorth || 0;
+        
         await recordTokenTransfer(
           reward.creator,
           reward.tokenAddress,
-          reward.voucherWorth || 0,
+          transferAmount,
           'TO_ESCROW',
           signature,
           undefined,
@@ -1172,13 +1176,14 @@ export const bulkCreateRewardLinks = async (data: BulkCreateRewardLinksData) => 
       quantity
     } = data
 
-    // Check if user has sufficient Verxio credits (minimum 1000 required for creating reward links)
+    // Check if user has sufficient Verxio credits (2000 for TOKEN, 500 for others)
     const creditCheck = await getUserVerxioCreditBalance(creatorAddress)
-    const totalCreditsNeeded = quantity * 500 // 500 credits per reward link
+    const creditPerReward = voucherType === 'TOKEN' ? 2000 : 500
+    const totalCreditsNeeded = quantity * creditPerReward
     if (!creditCheck.success || (creditCheck.balance || 0) < totalCreditsNeeded) {
       return {
         success: false,
-        error: `Insufficient Verxio credits. You need at least ${totalCreditsNeeded} credits to create ${quantity} reward links.`
+        error: `Insufficient Verxio credits. You need at least ${totalCreditsNeeded} credits to create ${quantity} ${voucherType === 'TOKEN' ? 'TOKEN' : ''} reward links.`
       }
     }
 
@@ -1285,10 +1290,10 @@ export const bulkCreateRewardLinks = async (data: BulkCreateRewardLinksData) => 
 
       createdRewards.push(created)
 
-      // Deduct 500 Verxio credits for each reward link created
+      // Deduct Verxio credits for each reward link created (2000 for TOKEN, 500 for others)
       const deductionResult = await awardOrRevokeLoyaltyPoints({
         creatorAddress,
-        points: 500,
+        points: creditPerReward,
         assetAddress: collection.collectionPublicKey,
         assetOwner: creatorAddress,
         action: 'REVOKE'
@@ -1316,12 +1321,14 @@ export const bulkCreateRewardLinks = async (data: BulkCreateRewardLinksData) => 
       }
       
       // Return the transaction for frontend signing (sponsored)
+      // Include all reward IDs for proper record keeping
       return {
         success: true,
         rewards: createdRewards,
         requiresEscrowTransfer: true,
         escrowTransaction: escrowResult.transaction,
         requiresSponsorship: escrowResult.requiresSponsorship,
+        totalTokenAmount: totalAmount,
         message: `Reward links created. Please sign the token transfer to escrow (${totalAmount} tokens).`
       };
     }
