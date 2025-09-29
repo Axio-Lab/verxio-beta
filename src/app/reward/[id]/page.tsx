@@ -12,6 +12,9 @@ import { getRewardLink, claimRewardLink } from '@/app/actions/reward';
 import { getVoucherDetails } from '@/lib/voucher/getVoucherDetails';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { AppButton } from '@/components/ui/app-button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { ExternalLink } from 'lucide-react';
 import { createOrUpdateUser } from '@/app/actions/user';
 
@@ -51,6 +54,19 @@ export default function ClaimRewardPage() {
   const [voucherDetails, setVoucherDetails] = useState<any>(null);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Withdraw states
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawType, setWithdrawType] = useState<'verxio' | 'external'>('verxio');
+  const [withdrawRecipient, setWithdrawRecipient] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [voucherTokenBalance, setVoucherTokenBalance] = useState<number | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [showWithdrawSuccess, setShowWithdrawSuccess] = useState(false);
+  const [withdrawSignature, setWithdrawSignature] = useState('');
+  const [withdrawAmountSuccess, setWithdrawAmountSuccess] = useState(0);
+  const [withdrawSymbol, setWithdrawSymbol] = useState('');
 
   const rewardId = params.id as string;
 
@@ -234,6 +250,57 @@ export default function ClaimRewardPage() {
     fetchVoucherDetails();
   }, [rewardDetails?.voucherAddress, rewardDetails?.status]);
 
+  // Fetch token balance when voucher details are ready (for TOKEN vouchers)
+  useEffect(() => {
+    const fetchBalance = async () => {
+      try {
+        if (!rewardDetails?.voucherAddress || !voucherDetails?.attributes?.['Token Address']) {
+          setVoucherTokenBalance(null);
+          return;
+        }
+        setIsLoadingBalance(true);
+        const { getVoucherTokenBalance } = await import('@/app/actions/withdraw');
+        const res = await getVoucherTokenBalance(
+          rewardDetails.voucherAddress,
+          voucherDetails.attributes['Token Address']
+        );
+        if (res.success) setVoucherTokenBalance(res.balance!);
+        else setVoucherTokenBalance(null);
+      } catch {
+        setVoucherTokenBalance(null);
+      } finally {
+        setIsLoadingBalance(false);
+      }
+    };
+    if (rewardDetails?.status === 'claimed' && voucherDetails?.voucherData?.type?.toLowerCase() === 'token') {
+      fetchBalance();
+    }
+  }, [rewardDetails?.status, rewardDetails?.voucherAddress, voucherDetails?.attributes, voucherDetails?.voucherData?.type]);
+
+  const fetchVoucherBalance = async () => {
+    if (!rewardDetails?.voucherAddress || !voucherDetails?.attributes?.['Token Address']) {
+      setVoucherTokenBalance(null);
+      return;
+    }
+    setIsLoadingBalance(true);
+    try {
+      const { getVoucherTokenBalance } = await import('@/app/actions/withdraw');
+      const result = await getVoucherTokenBalance(
+        rewardDetails.voucherAddress,
+        voucherDetails.attributes['Token Address']
+      );
+      if (result.success) {
+        setVoucherTokenBalance(result.balance!);
+      } else {
+        setVoucherTokenBalance(null);
+      }
+    } catch (e) {
+      setVoucherTokenBalance(null);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
   const handleClaimReward = async () => {
     if (!authenticated || !user?.wallet?.address || !rewardDetails) return;
 
@@ -244,7 +311,7 @@ export default function ClaimRewardPage() {
       
       if (result.success) {
         // reflect claimed state immediately to trigger the claimed view
-        setRewardDetails(prev => prev ? { ...prev, status: 'claimed' } as any : prev);
+        setRewardDetails(prev => prev ? { ...prev, status: 'claimed', voucherAddress: (result as any).voucherAddress } as any : prev);
         setShowSplash(true); // Play celebration video
         toast.success('Reward claimed successfully!', {
           position: "top-right",
@@ -267,6 +334,61 @@ export default function ClaimRewardPage() {
       });
     } finally {
       setIsClaiming(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!authenticated || !user?.wallet?.address || !rewardDetails?.voucherAddress) return;
+    if (!withdrawRecipient.trim() || !withdrawAmount.trim()) return;
+
+    const numAmount = parseFloat(withdrawAmount);
+    if (isNaN(numAmount) || numAmount <= 0) return;
+
+    setIsWithdrawing(true);
+    try {
+      const { withdrawTokens } = await import('@/app/actions/withdraw');
+      const result = await withdrawTokens({
+        voucherAddress: rewardDetails.voucherAddress,
+        withdrawType,
+        recipient: withdrawRecipient.trim(),
+        amount: numAmount,
+        senderWalletAddress: user.wallet.address,
+      });
+
+      if (result.success && result.recipientWalletAddress) {
+        const { buildWithdrawTransaction, updateWithdrawStatus } = await import('@/app/actions/withdraw');
+        const buildResult = await buildWithdrawTransaction({
+          voucherAddress: rewardDetails.voucherAddress,
+          recipientWallet: result.recipientWalletAddress,
+          amount: numAmount,
+          voucherId: result.voucherId!,
+          creatorAddress: user.wallet.address,
+        });
+
+        if (!buildResult.success || !buildResult.transaction) {
+          throw new Error(buildResult.error || 'Failed to execute withdraw transaction');
+        }
+
+        await updateWithdrawStatus(result.withdrawId!, buildResult.transaction);
+
+        // Success popup
+        setShowWithdrawModal(false);
+        setWithdrawSignature(buildResult.transaction);
+        setWithdrawAmountSuccess(numAmount);
+        setWithdrawSymbol(rewardDetails.symbol || 'USDC');
+        setShowWithdrawSuccess(true);
+
+        // Cleanup
+        setWithdrawRecipient('');
+        setWithdrawAmount('');
+        setWithdrawType('verxio');
+        setVoucherTokenBalance(null);
+        setIsLoadingBalance(false);
+      }
+    } catch (txError) {
+      console.error('Withdraw transaction failed:', txError);
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -491,17 +613,50 @@ export default function ClaimRewardPage() {
 
               {/* Claim Button or Status Message */}
               {rewardDetails.status === 'claimed' ? (
-                <div className="text-center space-y-4">
-                  <div className="p-4 bg-green-500/20 border border-green-500/40 rounded-lg">
-                    <h3 className="text-lg font-semibold text-green-400 mb-2">Reward Claimed</h3>
+                <div className="space-y-4">
+                  <div className="p-4 bg-green-500/20 border border-green-500/40 rounded-lg text-center">
+                    <h3 className="text-lg font-semibold text-green-400">Reward Claimed</h3>
                   </div>
-                  <AppButton
-                    onClick={() => window.location.href = '/dashboard'}
-                    className="w-full"
-                    variant="secondary"
-                  >
-                    Go to Dashboard
-                  </AppButton>
+                  {authenticated && voucherDetails?.voucherData?.type?.toLowerCase() === 'token' ? (
+                    <div className="space-y-2">
+                      {isLoadingBalance ? (
+                        <div className="text-center text-xs text-white/60">Checking balance...</div>
+                      ) : voucherTokenBalance !== null && voucherTokenBalance <= 0 ? (
+                        <div className="space-y-2">
+                          <div className="p-2 rounded border border-white/10 bg-white/5 text-white/70 text-xs text-center">Nothing to withdraw</div>
+                          <AppButton onClick={() => window.location.href = '/dashboard'} className="w-full" variant="secondary">
+                            Go to Dashboard
+                          </AppButton>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setWithdrawRecipient('');
+                              setWithdrawAmount((rewardDetails.voucherWorth || 0).toString());
+                              setWithdrawType('verxio');
+                              setShowWithdrawModal(true);
+                            }}
+                            disabled={voucherTokenBalance !== null && voucherTokenBalance <= 0}
+                            className={`flex-1 px-3 py-2 border text-sm font-medium rounded transition-colors ${
+                              voucherTokenBalance !== null && voucherTokenBalance <= 0
+                                ? 'bg-gray-700/30 text-gray-400 border-gray-600 cursor-not-allowed'
+                                : 'bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border-orange-600/30'
+                            }`}
+                          >
+                            Withdraw Tokens
+                          </button>
+                          <AppButton onClick={() => window.location.href = '/dashboard'} variant="secondary" className="flex-1">
+                            Go to Dashboard
+                          </AppButton>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <AppButton onClick={() => window.location.href = '/dashboard'} className="w-full" variant="secondary">
+                      Go to Dashboard
+                    </AppButton>
+                  )}
                 </div>
               ) : authenticated ? (
                 <AppButton
@@ -541,6 +696,205 @@ export default function ClaimRewardPage() {
         </div>
       </div>
 
+      {/* Withdraw Modal */}
+      {showWithdrawModal && rewardDetails && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold text-lg">Withdraw Tokens</h3>
+            </div>
+
+            <div className="space-y-4">
+              {/* Voucher Info */}
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <div className="text-blue-400 text-sm font-medium mb-1">Withdrawing from:</div>
+                <div className="text-white text-sm">
+                  {rewardDetails.name || `Voucher`} - {rewardDetails.voucherWorth} {rewardDetails.symbol || 'USDC'}
+                </div>
+              </div>
+
+              {/* Withdraw Type Toggle */}
+              <div className="space-y-3">
+                <Label className="text-white text-sm font-medium">Withdraw To</Label>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={withdrawType === 'verxio'}
+                      onCheckedChange={(checked) => {
+                        setWithdrawType(checked ? 'verxio' : 'external');
+                        setWithdrawRecipient('');
+                      }}
+                    />
+                    <Label className="text-white text-sm">Verxio User</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={withdrawType === 'external'}
+                      onCheckedChange={(checked) => {
+                        setWithdrawType(checked ? 'external' : 'verxio');
+                        setWithdrawRecipient('');
+                      }}
+                    />
+                    <Label className="text-white text-sm">External Wallet</Label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recipient Field */}
+              <div className="space-y-2">
+                <Label htmlFor="withdraw-recipient" className="text-white text-sm font-medium">
+                  {withdrawType === 'verxio' ? 'Recipient Email' : 'Recipient Wallet Address'}
+                </Label>
+                <Input
+                  id="withdraw-recipient"
+                  type={withdrawType === 'verxio' ? 'email' : 'text'}
+                  value={withdrawRecipient}
+                  onChange={(e) => setWithdrawRecipient(e.target.value)}
+                  placeholder={withdrawType === 'verxio' ? 'Enter verxio user email address' : 'Enter Solana wallet address'}
+                  className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                />
+              </div>
+
+              {/* Amount Field */}
+              <div className="space-y-2">
+                <Label htmlFor="withdraw-amount" className="text-white text-sm font-medium">
+                  Amount to Withdraw ({rewardDetails.symbol || 'USDC'})
+                </Label>
+                <Input
+                  id="withdraw-amount"
+                  type="number"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                  max={voucherTokenBalance !== null ? voucherTokenBalance : (rewardDetails.voucherWorth || 0)}
+                  className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                />
+                <div className="text-xs text-white/60">
+                  {isLoadingBalance ? (
+                    <span>Loading balance...</span>
+                  ) : voucherTokenBalance !== null && (
+                    <span>Available: {voucherTokenBalance.toFixed(2)} {rewardDetails.symbol || 'USDC'}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                <div className="text-orange-400 text-sm font-medium mb-1">Warning</div>
+                <div className="text-orange-300 text-xs">
+                  This will withdraw tokens from the voucher and transfer them to the specified recipient.
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <AppButton
+                  onClick={() => {
+                    setShowWithdrawModal(false);
+                    setWithdrawRecipient('');
+                    setWithdrawAmount('');
+                    setWithdrawType('verxio');
+                    setVoucherTokenBalance(null);
+                    setIsLoadingBalance(false);
+                  }}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  Cancel
+                </AppButton>
+                <AppButton
+                  onClick={handleWithdraw}
+                  disabled={
+                    !withdrawRecipient.trim() ||
+                    !withdrawAmount.trim() ||
+                    parseFloat(withdrawAmount) <= 0 ||
+                    parseFloat(withdrawAmount) > (voucherTokenBalance !== null ? voucherTokenBalance : (rewardDetails.voucherWorth || 0)) ||
+                    isWithdrawing ||
+                    (voucherTokenBalance !== null && voucherTokenBalance <= 0) ||
+                    isLoadingBalance
+                  }
+                  className="flex-1"
+                >
+                  {isWithdrawing ? (
+                    <div className="flex items-center gap-2">
+                      <VerxioLoaderWhite size="sm" />
+                      Withdrawing...
+                    </div>
+                  ) : isLoadingBalance ? (
+                    <div className="flex items-center gap-2">
+                      <VerxioLoaderWhite size="sm" />
+                      Loading Balance...
+                    </div>
+                  ) : (voucherTokenBalance !== null && voucherTokenBalance <= 0) ? (
+                    'Insufficient Balance'
+                  ) : (
+                    'Confirm Withdraw'
+                  )}
+                </AppButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Withdraw Success Modal */}
+      {showWithdrawSuccess && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white">Withdrawal Successful!</h3>
+              <p className="text-white/80">
+                Your tokens have been withdrawn successfully!
+              </p>
+
+              <div className="p-4 bg-black/20 rounded-lg border border-white/10">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-white">Amount:</span>
+                  <span className="text-white font-medium">{withdrawAmountSuccess.toFixed(2)} {withdrawSymbol}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-white">Transaction:</span>
+                  <span className="text-white font-mono text-sm truncate max-w-32">
+                    {withdrawSignature.slice(0, 8)}...{withdrawSignature.slice(-8)}
+                  </span>
+                </div>
+                <div className="flex justify-end">
+                  <a
+                    href={`https://solscan.io/tx/${withdrawSignature}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-[#00adef] text-sm hover:text-[#00adef]/80 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    View on Solscan
+                  </a>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowWithdrawSuccess(false);
+                  setWithdrawSignature('');
+                  setWithdrawAmountSuccess(0);
+                  setWithdrawSymbol('');
+                }}
+                className="w-full px-4 py-2 bg-white hover:bg-gray-100 text-black rounded-lg transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ToastContainer
         position="top-right"
         autoClose={5000}
