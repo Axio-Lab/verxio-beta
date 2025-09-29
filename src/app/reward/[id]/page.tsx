@@ -679,9 +679,10 @@ export default function ClaimRewardPage() {
               ) : (
                 <AppButton
                   onClick={login}
+                  disabled={isExpired}
                   className="w-full"
                 >
-                  Continue to Claim Reward
+                  {isExpired ? 'Reward Expired' : 'Continue to Claim Reward'}
                 </AppButton>
               )}
 
