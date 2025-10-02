@@ -81,6 +81,10 @@ interface VoucherCollection {
     image: string | null;
     isExpired: boolean;
     canRedeem: boolean;
+    voucherData?: {
+      remainingWorth: number;
+      [key: string]: any;
+    };
   }>;
 }
 
@@ -1972,7 +1976,7 @@ export default function VoucherCollectionDetailPage() {
 
                       <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
                         <div>Type: {voucher.voucherType.replace(/_/g, ' ')}</div>
-                        <div>Value: {voucher.value?.toLocaleString()} {voucher.symbol || 'USDC'}</div>
+                        <div>Value: {(voucher.voucherData?.remainingWorth ?? voucher.value)?.toLocaleString()} {voucher.symbol || 'USDC'}</div>
                         <div>Uses: {voucher.currentUses}/{voucher.maxUses}</div>
                         <div>Expires: {new Date(voucher.expiryDate).toLocaleDateString()}</div>
                       </div>
@@ -2021,7 +2025,7 @@ export default function VoucherCollectionDetailPage() {
                               setModalError(null);
                               // Set redeem amount after a small delay to ensure modal is rendered
                               setTimeout(() => {
-                                setRedeemAmount(voucher.value ? voucher.value.toString() : '');
+                                setRedeemAmount((voucher.voucherData?.remainingWorth ?? voucher.value) ? (voucher.voucherData?.remainingWorth ?? voucher.value).toString() : '');
                               }, 100);
                             }}
                             disabled={operatingVoucherId === voucher.id}
@@ -2160,7 +2164,7 @@ export default function VoucherCollectionDetailPage() {
                           {collection?.vouchers.find(v => v.id === modalVoucherId)?.voucherType?.replace(/_/g, ' ').toLowerCase()}
                         </span>{' '}
                         voucher for{' '}
-                        <span className="text-blue-400 font-medium">
+                        <span className="text-blue-400 font-medium break-all">
                           {collection?.vouchers.find(v => v.id === modalVoucherId)?.recipient}
                         </span>
                       </div>

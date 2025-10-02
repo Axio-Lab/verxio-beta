@@ -80,7 +80,6 @@ export default function ClaimRewardPage() {
         setError(null);
         
         const result = await getRewardLink(rewardId);
-        
         if (result.success && result.reward) {
           setRewardDetails(result.reward as RewardDetails);
         } else {
@@ -191,7 +190,7 @@ export default function ClaimRewardPage() {
         const playPromise = v.play();
         if (playPromise && typeof playPromise.then === 'function') {
           await playPromise;
-          console.log('Video autoplay successful');
+          // console.log('Video autoplay successful');
         }
       } catch (error) {
         console.log('Autoplay failed, trying fallback:', error);
@@ -237,6 +236,7 @@ export default function ClaimRewardPage() {
       setVoucherLoading(true);
       try {
         const result = await getVoucherDetails(rewardDetails.voucherAddress);
+        console.log('🔍 Voucher Details Result:', result);
         if (result.success && result.data) {
           setVoucherDetails(result.data);
         }
@@ -307,7 +307,7 @@ export default function ClaimRewardPage() {
     try {
       setIsClaiming(true);
       
-      const result = await claimRewardLink(rewardId, user.wallet.address, rewardDetails.creator);
+        const result = await claimRewardLink(rewardId, user.wallet.address, rewardDetails.creator);
       
       if (result.success) {
         // reflect claimed state immediately to trigger the claimed view
@@ -571,7 +571,7 @@ export default function ClaimRewardPage() {
                     <div className="flex justify-between items-center">
                       <span className="text-white/60 text-sm">Voucher Worth</span>
                       <span className="text-white font-medium">
-                        {rewardDetails.voucherWorth.toLocaleString()} {rewardDetails.symbol || 'USD'}
+                        {(voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth).toLocaleString()} {rewardDetails.symbol || 'USD'}
                       </span>
                     </div>
                   )}
@@ -640,7 +640,7 @@ export default function ClaimRewardPage() {
                           <button
                             onClick={() => {
                               setWithdrawRecipient('');
-                              setWithdrawAmount((rewardDetails.voucherWorth || 0).toString());
+                              setWithdrawAmount(((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0).toString());
                               setWithdrawType('verxio');
                               setVoucherTokenBalance(null);
                               setIsLoadingBalance(true);
@@ -670,13 +670,18 @@ export default function ClaimRewardPage() {
               ) : authenticated ? (
                 <AppButton
                   onClick={handleClaimReward}
-                  disabled={isClaiming}
+                  disabled={isClaiming || isExpired}
                   className="w-full"
                 >
                   {isClaiming ? (
                     <>
                       <VerxioLoaderWhite size="sm" />
                       <span className="ml-2">Claiming...</span>
+                    </>
+                  ) : isExpired ? (
+                    <>
+                      <Gift className="w-4 h-4 mr-2" />
+                      Reward Expired
                     </>
                   ) : (
                     <>
@@ -719,7 +724,7 @@ export default function ClaimRewardPage() {
               <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                 <div className="text-blue-400 text-sm font-medium mb-1">Withdrawing from:</div>
                 <div className="text-white text-sm">
-                  {rewardDetails.name || `Voucher`} - {rewardDetails.voucherWorth} {rewardDetails.symbol || 'USDC'}
+                  {rewardDetails.name || `Voucher`} - {voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth} {rewardDetails.symbol || 'USDC'}
                 </div>
               </div>
 
@@ -778,7 +783,7 @@ export default function ClaimRewardPage() {
                   placeholder="0.00"
                   step="0.01"
                   min="0"
-                  max={voucherTokenBalance !== null ? voucherTokenBalance : (rewardDetails.voucherWorth || 0)}
+                  max={voucherTokenBalance !== null ? voucherTokenBalance : ((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0)}
                   className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                 />
                   <div className="text-xs text-white/60">
@@ -822,7 +827,7 @@ export default function ClaimRewardPage() {
                       !withdrawRecipient.trim() || 
                       !withdrawAmount.trim() || 
                       parseFloat(withdrawAmount) <= 0 ||
-                      parseFloat(withdrawAmount) > (voucherTokenBalance !== null ? voucherTokenBalance : (rewardDetails.voucherWorth || 0)) ||
+                      parseFloat(withdrawAmount) > (voucherTokenBalance !== null ? voucherTokenBalance : ((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0)) ||
                       isWithdrawing ||
                       (voucherTokenBalance !== null && voucherTokenBalance <= 0) ||
                       isLoadingBalance ||

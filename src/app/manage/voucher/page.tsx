@@ -12,6 +12,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { toast } from 'react-toastify';
 
 interface VoucherCollection {
   id: string;
@@ -112,36 +113,74 @@ export default function ManageVouchersPage() {
         // Get detailed voucher information including symbol for each voucher
         const { getVoucherDetails } = await import('@/lib/voucher/getVoucherDetails');
         
-        const vouchersWithDetails = await Promise.all(
-          result.vouchers.map(async (voucher: any) => {
-            try {
-              const voucherDetails = await getVoucherDetails(voucher.voucherAddress);
-              if (voucherDetails.success && voucherDetails.data) {
+        // Show vouchers immediately with basic info, then load details progressively
+        setUserVouchers(result.vouchers); // Show vouchers immediately
+        
+        // Load details progressively in background
+        const loadVoucherDetails = async (vouchers: any[]) => {
+          const batchSize = 3; // Smaller batches for smoother loading
+          const updatedVouchers = [...vouchers];
+          
+          for (let i = 0; i < vouchers.length; i += batchSize) {
+            const batch = vouchers.slice(i, i + batchSize);
+            
+            // Process batch concurrently
+            const batchPromises = batch.map(async (voucher: any, batchIndex: number) => {
+              const voucherIndex = i + batchIndex;
+              try {
+                 const voucherDetails = await getVoucherDetails(voucher.voucherAddress);
+                 if (voucherDetails.success && voucherDetails.data) {
+                   const symbol = voucherDetails.data.attributes?.['Asset Symbol'] || 'USDC';
+                   return {
+                     ...voucher,
+                     symbol: symbol,
+                     tokenAddress: voucherDetails.data.attributes?.['Token Address'],
+                     voucherData: voucherDetails.data.voucherData,
+                     isLoadingDetails: false // Mark as loaded
+                   };
+                 }
+                
                 return {
                   ...voucher,
-                  symbol: voucherDetails.data.attributes?.['Asset Symbol'],
-                  tokenAddress: voucherDetails.data.attributes?.['Token Address']
+                  symbol: 'USDC',
+                  isLoadingDetails: false
+                };
+              } catch (error) {
+                console.error('Error fetching voucher details:', error);
+                return {
+                  ...voucher,
+                  symbol: 'USDC',
+                  isLoadingDetails: false
                 };
               }
-              
-              return {
-                ...voucher,
-                symbol: 'USDC' // fallback
-              };
-            } catch (error) {
-              console.error('Error fetching voucher details:', error);
-              return {
-                ...voucher,
-                symbol: 'USDC' // fallback
-              };
+            });
+            
+            // Wait for batch to complete
+            const batchResults = await Promise.all(batchPromises);
+            
+            // Update the vouchers array with new details
+            batchResults.forEach((updatedVoucher, batchIndex) => {
+              const voucherIndex = i + batchIndex;
+              updatedVouchers[voucherIndex] = updatedVoucher;
+            });
+            
+            // Update UI with current progress
+            setUserVouchers([...updatedVouchers]);
+            
+            // Small delay between batches to respect rate limits
+            if (i + batchSize < vouchers.length) {
+              await new Promise(resolve => setTimeout(resolve, 500)); // 0.5 second delay
             }
-          })
-        );
+          }
+        };
         
-        setUserVouchers(vouchersWithDetails);
+        // Start loading details in background (don't await)
+        loadVoucherDetails(result.vouchers);
+      } else {
+        toast.error('No vouchers found or error in result:', result.error);
       }
     } catch (error) {
-      console.error('Error loading user vouchers:', error);
+      console.error('❌ Error loading user vouchers:', error);
     } finally {
       setUserVouchersLoading(false);
     }
@@ -149,7 +188,7 @@ export default function ManageVouchersPage() {
 
   const fetchVoucherBalance = async (voucher: any) => {
     if (!voucher.tokenAddress) {
-      console.log('No token address found for voucher');
+      toast.error('No token address found for voucher');
       setVoucherTokenBalance(null);
       return;
     }
@@ -162,11 +201,11 @@ export default function ManageVouchersPage() {
       if (result.success) {
         setVoucherTokenBalance(result.balance!);
       } else {
-        console.error('Failed to fetch token balance:', result.error);
+        toast.error('Failed to fetch token balance');
         setVoucherTokenBalance(null);
       }
     } catch (error) {
-      console.error('Error fetching voucher balance:', error);
+      toast.error('Error fetching voucher balance');
       setVoucherTokenBalance(null);
     } finally {
       setIsLoadingBalance(false);
@@ -242,7 +281,6 @@ export default function ManageVouchersPage() {
             try {
               const { updateWithdrawStatusFailed } = await import('@/app/actions/withdraw');
               await updateWithdrawStatusFailed(result.withdrawId, txError instanceof Error ? txError.message : 'Transaction failed');
-              console.log('Updated withdraw status to FAILED for ID:', result.withdrawId);
             } catch (updateError) {
               console.error('Failed to update withdraw status to failed:', updateError);
             }
@@ -397,24 +435,34 @@ export default function ManageVouchersPage() {
                     <div key={voucher.voucherAddress || index} className="bg-gradient-to-br from-white/10 to-white/5 rounded-lg p-4 border border-white/20 hover:border-white/30 transition-all duration-300">
                       {/* Voucher Header */}
                       <div className="flex items-center justify-between mb-3">
-                        <div className="text-sm font-medium text-white truncate">
-                          {voucher.name || `Voucher ${index + 1}`}
+                        <div className="text-sm font-medium text-white truncate flex items-center gap-2">
+                          {voucher.isLoadingDetails ? (
+                            <>
+                              <VerxioLoaderWhite size="md" />
+                              <span className="text-white/60">Loading...</span>
+                            </>
+                          ) : (
+                            voucher.name || `Voucher ${index + 1}`
+                          )}
                         </div>
                         <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          voucher.isLoadingDetails ? 'bg-yellow-500/20 text-yellow-400' :
                           voucher.isExpired ? 'bg-red-500/20 text-red-400' :
                           voucher.voucherData?.status === 'active' ? 'bg-green-500/20 text-green-400' :
                           voucher.voucherData?.status === 'used' ? 'bg-blue-500/20 text-blue-400' :
                           'bg-gray-500/20 text-gray-400'
                         }`}>
-                          {voucher.isExpired ? 'EXPIRED' : voucher.voucherData?.status?.toUpperCase()}
+                          {voucher.isLoadingDetails ? 'LOADING' :
+                           voucher.isExpired ? 'EXPIRED' : 
+                           voucher.voucherData?.status?.toUpperCase() || 'UNKNOWN'}
                         </div>
                       </div>
 
                       {/* Voucher Details */}
                       <div className="grid grid-cols-2 gap-2 text-xs text-white/60 mb-3">
-                        <div>Type: {voucher.voucherData?.type?.replace('_', ' ')}</div>
-                        <div>Value: {voucher.voucherData?.value} {voucher.symbol }</div>
-                        {!voucher.isExpired && (
+                        <div>Type: {voucher.isLoadingDetails ? '...' : (voucher.voucherData?.type?.replace('_', ' ') || 'Unknown')}</div>
+                        <div>Value: {voucher.isLoadingDetails ? '...' : `${voucher.voucherData?.remainingWorth ?? voucher.voucherData?.value} ${voucher.symbol}`}</div>
+                        {!voucher.isExpired && !voucher.isLoadingDetails && (
                           <>
                             <div>Uses: {voucher.voucherData?.currentUses}/{voucher.voucherData?.maxUses}</div>
                             <div>Remaining: {voucher.remainingUses}</div>
@@ -424,7 +472,8 @@ export default function ManageVouchersPage() {
 
 
                       {/* Withdraw Button for TOKEN vouchers */}
-                      {voucher.voucherData?.type?.toLowerCase() === 'token' && 
+                      {!voucher.isLoadingDetails &&
+                       voucher.voucherData?.type?.toLowerCase() === 'token' && 
                        voucher.voucherData?.status === 'active' && 
                        !voucher.isExpired && (
                         <div className="mb-3">

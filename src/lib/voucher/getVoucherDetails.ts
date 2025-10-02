@@ -21,6 +21,7 @@ export interface VoucherDetails {
   voucherData: {
     type: string;
     value: number;
+    remainingWorth: number; // Calculated remaining worth after redemptions
     status: string;
     maxUses: number;
     issuedAt: number;
@@ -33,6 +34,15 @@ export interface VoucherDetails {
     redemptionHistory: any[];
   };
 }
+
+// Helper function to calculate remaining voucher worth
+const calculateRemainingWorth = (originalValue: number, redemptionHistory: any[]): number => {
+  const totalRedeemed = redemptionHistory.reduce((sum, redemption) => {
+    return sum + (redemption.total_amount || 0);
+  }, 0);
+  const remainingWorth = Math.max(0, originalValue - totalRedeemed);
+  return remainingWorth;
+};
 
 export const getVoucherDetails = async (voucherAddress: string): Promise<{
   success: boolean;
@@ -55,8 +65,36 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
       })
     };
 
-    const response = await fetch(url, options);
-    const data = await response.json();
+    // Add retry logic for rate limiting
+    let response;
+    let data;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount <= maxRetries) {
+      try {
+        response = await fetch(url, options);
+        data = await response.json();
+        
+        // If we get a 429 (Too Many Requests), wait and retry
+        if (response.status === 429 && retryCount < maxRetries) {
+          const waitTime = Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          retryCount++;
+          continue;
+        }
+        
+        break; // Success or non-429 error
+      } catch (error) {
+        if (retryCount < maxRetries) {
+          const waitTime = Math.pow(2, retryCount) * 1000;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          retryCount++;
+          continue;
+        }
+        throw error; // Final attempt failed
+      }
+    }
     
     if (data.error) {
       return { success: false, error: data.error.message };
@@ -104,6 +142,13 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
       redemptionHistory: []
     };
 
+    // Calculate remaining worth for TOKEN and FIAT vouchers
+    const originalValue = voucherData.value || 0;
+    const redemptionHistory = voucherData.redemption_history || [];
+    const remainingWorth = (voucherData.type?.toLowerCase() === 'token' || voucherData.type?.toLowerCase() === 'fiat') 
+      ? calculateRemainingWorth(originalValue, redemptionHistory)
+      : originalValue;
+
     const voucherDetails: VoucherDetails = {
       id: asset.id,
       name: metadata?.name || 'Unknown Voucher',
@@ -126,7 +171,8 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
       collectionId: collectionId,
       voucherData: {
         type: voucherData.type || '',
-        value: voucherData.value || 0,
+        value: originalValue,
+        remainingWorth: remainingWorth,
         status: voucherData.status || 'active',
         maxUses: voucherData.max_uses || 1,
         issuedAt: voucherData.issued_at || 0,
@@ -136,7 +182,7 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
         merchantId: voucherData.merchant_id || '',
         currentUses: voucherData.current_uses || 0,
         transferable: voucherData.transferable || true,
-        redemptionHistory: voucherData.redemption_history || []
+        redemptionHistory: redemptionHistory
       }
     };
 
