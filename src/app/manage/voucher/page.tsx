@@ -471,11 +471,12 @@ export default function ManageVouchersPage() {
                       </div>
 
 
-                      {/* Withdraw Button for TOKEN vouchers */}
+                      {/* Withdraw Button for TOKEN vouchers - Only for voucher owner */}
                       {!voucher.isLoadingDetails &&
                        voucher.voucherData?.type?.toLowerCase() === 'token' && 
                        voucher.voucherData?.status === 'active' && 
-                       !voucher.isExpired && (
+                       !voucher.isExpired &&
+                       voucher.recipient === user?.wallet?.address && (
                         <div className="mb-3">
                           <button
                             onClick={() => {
