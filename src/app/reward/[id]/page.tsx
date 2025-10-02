@@ -236,7 +236,6 @@ export default function ClaimRewardPage() {
       setVoucherLoading(true);
       try {
         const result = await getVoucherDetails(rewardDetails.voucherAddress);
-        console.log('🔍 Voucher Details Result:', result);
         if (result.success && result.data) {
           setVoucherDetails(result.data);
         }
@@ -624,7 +623,7 @@ export default function ClaimRewardPage() {
                   <div className="p-4 bg-green-500/20 border border-green-500/40 rounded-lg text-center">
                     <h3 className="text-lg font-semibold text-green-400">Reward Claimed</h3>
                   </div>
-                  {authenticated && voucherDetails?.voucherData?.type?.toLowerCase() === 'token' ? (
+                  {authenticated && voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && voucherDetails?.owner === user?.wallet?.address ? (
                     <div className="space-y-2">
                       {isLoadingBalance ? (
                         <div className="text-center text-xs text-white/60">Checking balance...</div>
