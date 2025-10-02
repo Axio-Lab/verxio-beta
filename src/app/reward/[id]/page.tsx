@@ -307,7 +307,7 @@ export default function ClaimRewardPage() {
     try {
       setIsClaiming(true);
       
-      const result = await claimRewardLink(rewardId, user.wallet.address, rewardDetails.creator);
+        const result = await claimRewardLink(rewardId, user.wallet.address, rewardDetails.creator);
       
       if (result.success) {
         // reflect claimed state immediately to trigger the claimed view
@@ -670,13 +670,18 @@ export default function ClaimRewardPage() {
               ) : authenticated ? (
                 <AppButton
                   onClick={handleClaimReward}
-                  disabled={isClaiming}
+                  disabled={isClaiming || isExpired}
                   className="w-full"
                 >
                   {isClaiming ? (
                     <>
                       <VerxioLoaderWhite size="sm" />
                       <span className="ml-2">Claiming...</span>
+                    </>
+                  ) : isExpired ? (
+                    <>
+                      <Gift className="w-4 h-4 mr-2" />
+                      Reward Expired
                     </>
                   ) : (
                     <>
