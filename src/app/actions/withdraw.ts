@@ -208,6 +208,23 @@ export const buildWithdrawTransaction = async (
     transaction.sign(voucherKeypair, feePayerKeypair);
     const signature = await connection.sendRawTransaction(transaction.serialize());
 
+    // After successful token transfer, redeem the voucher amount
+    try {
+      // console.log('Redeeming voucher amount:', amount);
+      const { redeemVoucher } = await import('./voucher');
+      const redeemResult = await redeemVoucher(voucherId, creatorAddress, creatorAddress, amount);
+      
+      if (redeemResult.success) {
+        console.log('Voucher redeemed successfully for withdrawal amount:', amount);
+      } else {
+        console.error('Failed to redeem voucher after withdrawal:', redeemResult.error);
+        // Don't fail the withdrawal if redemption fails, but log the error
+      }
+    } catch (redeemError) {
+      console.error('Error redeeming voucher after withdrawal:', redeemError);
+      // Don't fail the withdrawal if redemption fails, but log the error
+    }
+
     // Wait for confirmation
     await connection.confirmTransaction(signature, 'confirmed');
 

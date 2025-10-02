@@ -351,64 +351,29 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
     // Fetch collection details from blockchain
     const details = await getVoucherCollectionDetails(collectionPublicKey);
     
-    // Fetch detailed voucher information for each voucher
-    const vouchersWithDetails = await Promise.all(
-      collection.vouchers.map(async (voucher: any) => {
-        try {
-          const [voucherDetails, userResult] = await Promise.all([
-            getVoucherDetails(voucher.voucherPublicKey),
-            getUserByWallet(voucher.recipient)
-          ]);
-          
-          // Get email address or fallback to wallet address
-          const recipientEmail = userResult.success && userResult.user?.email 
-            ? userResult.user.email 
-            : userResult.success && userResult.user?.name
-            ? userResult.user.name
-            : voucher.recipient;
-
-          return {
-            ...voucher,
-            recipient: recipientEmail,
-            voucherName: voucherDetails.success ? voucherDetails.data?.name : 'Unknown Voucher',
-            voucherType: voucherDetails.success ? voucherDetails.data?.attributes?.voucherType : 'Unknown',
-            value: voucherDetails.success ? voucherDetails.data?.voucherData?.value : 0,
-            symbol: voucherDetails.success ? voucherDetails.data?.attributes?.['Asset Symbol'] : 'USDC',
-            description: voucherDetails.success ? voucherDetails.data?.description : '',
-            expiryDate: voucherDetails.success ? new Date(voucherDetails.data?.voucherData?.expiryDate || 0).toISOString() : '',
-            maxUses: voucherDetails.success ? voucherDetails.data?.voucherData?.maxUses : 1,
-            currentUses: voucherDetails.success ? voucherDetails.data?.voucherData?.currentUses : 0,
-            transferable: voucherDetails.success ? voucherDetails.data?.voucherData?.transferable : true,
-            status: voucherDetails.success ? voucherDetails.data?.voucherData?.status : 'active',
-            merchantId: voucherDetails.success ? voucherDetails.data?.voucherData?.merchantId : '',
-            conditions: voucherDetails.success ? voucherDetails.data?.attributes?.conditions : '',
-            image: voucherDetails.success ? voucherDetails.data?.image : null,
-            isExpired: voucherDetails.success ? (voucherDetails.data?.voucherData?.expiryDate || 0) < Date.now() : false,
-            canRedeem: voucherDetails.success ? (voucherDetails.data?.voucherData?.currentUses || 0) < (voucherDetails.data?.voucherData?.maxUses || 1) : false
-          };
-        } catch (error) {
-          console.error('Error fetching voucher details:', error);
-          return {
-            ...voucher,
-            voucherName: 'Unknown Voucher',
-            voucherType: 'Unknown',
-            value: 0,
-            symbol: 'USDC',
-            description: '',
-            expiryDate: '',
-            maxUses: 1,
-            currentUses: 0,
-            transferable: true,
-            status: 'active',
-            merchantId: '',
-            conditions: '',
-            image: null,
-            isExpired: false,
-            canRedeem: false
-          };
-        }
-      })
-    );
+    // Return basic voucher info immediately, details will be loaded progressively in frontend
+    const vouchers = collection.vouchers;
+    const vouchersWithBasicInfo = vouchers.map((voucher: any) => ({
+      ...voucher,
+      recipient: voucher.recipient, // Keep the wallet address for now
+      voucherName: 'Loading...',
+      voucherType: 'Loading...',
+      value: 0,
+      symbol: 'USDC',
+      description: '',
+      expiryDate: '',
+      maxUses: 1,
+      currentUses: 0,
+      transferable: true,
+      status: 'active',
+      merchantId: '',
+      conditions: '',
+      image: null,
+      isExpired: false,
+      canRedeem: false,
+      voucherData: null,
+      isLoadingDetails: true // Flag to indicate details are being loaded
+    }));
     
     return {
       success: true,
@@ -418,7 +383,7 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
         collectionImage: details.success ? details.data?.image : null,
         voucherStats: details.success ? details.data?.voucherStats : null,
         blockchainDetails: details.success ? details.data : null,
-        vouchers: vouchersWithDetails
+        vouchers: vouchersWithBasicInfo
       }
     }
   } catch (error: any) {
@@ -901,7 +866,6 @@ export const getUserVouchers = async (userAddress: string, collectionAddress?: s
     // Get Verxio configuration
     const config = await getVerxioConfig()
     const initializeContext = await initializeVerxio(userAddress, config.rpcEndpoint, config.privateKey!)
-    
     if (!initializeContext.success || !initializeContext.context) {
       return {
         success: false,
@@ -910,10 +874,11 @@ export const getUserVouchers = async (userAddress: string, collectionAddress?: s
     }
 
     // Get vouchers from blockchain using core function
-    const vouchersResult = await getUserVouchersCore(initializeContext.context, {
+    const coreParams = {
       userAddress: publicKey(userAddress),
       ...(collectionAddress && { collectionAddress: publicKey(collectionAddress) })
-    })
+    };    
+    const vouchersResult = await getUserVouchersCore(initializeContext.context, coreParams)
 
     if (!vouchersResult.success || !vouchersResult.result) {
       return {
@@ -922,12 +887,35 @@ export const getUserVouchers = async (userAddress: string, collectionAddress?: s
       }
     }
 
+    // Return basic voucher info immediately, details will be loaded progressively in frontend
+    const vouchers = vouchersResult.result.vouchers || [];
+    const vouchersWithBasicInfo = vouchers.map((voucher: any) => ({
+      ...voucher,
+      voucherName: 'Loading...',
+      voucherType: 'Loading...',
+      value: 0,
+      symbol: 'USDC', // Default fallback
+      description: '',
+      expiryDate: '',
+      maxUses: 1,
+      currentUses: 0,
+      transferable: true,
+      status: 'active',
+      merchantId: '',
+      conditions: '',
+      image: null,
+      isExpired: false,
+      canRedeem: false,
+      voucherData: null,
+      isLoadingDetails: true // Flag to indicate details are being loaded
+    }));
+    
     return {
       success: true,
-      vouchers: vouchersResult.result.vouchers || []
+      vouchers: vouchersWithBasicInfo
     }
   } catch (error: any) {
-    console.error('Error fetching user vouchers:', error)
+    console.error('❌ Error fetching user vouchers:', error)
     return {
       success: false,
       error: error.message || 'Failed to fetch user vouchers'
