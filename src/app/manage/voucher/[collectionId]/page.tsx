@@ -2016,7 +2016,7 @@ export default function VoucherCollectionDetailPage() {
 
                       {/* Voucher Operations */}
                       <div className="flex flex-wrap gap-2">
-                        {voucher.canRedeem && !voucher.isExpired && voucher.status === 'active' && (
+                        {voucher.canRedeem && !voucher.isExpired && voucher.status === 'active' && voucher.voucherType.toLowerCase() !== 'token' && (
                           <button
                             onClick={() => {
                               setModalVoucherId(voucher.id);
