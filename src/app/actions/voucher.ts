@@ -860,6 +860,41 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
   }
 }
 
+// Get Voucher ID by Address (helper function for reward page)
+export const getVoucherIdByAddress = async (voucherAddress: string, creatorAddress: string) => {
+  try {
+    const voucher = await prisma.voucher.findFirst({
+      where: {
+        voucherPublicKey: voucherAddress,
+        collection: {
+          creator: creatorAddress
+        }
+      },
+      select: {
+        id: true
+      }
+    })
+
+    if (!voucher) {
+      return {
+        success: false,
+        error: 'Voucher not found'
+      }
+    }
+
+    return {
+      success: true,
+      voucherId: voucher.id
+    }
+  } catch (error: any) {
+    console.error('Error fetching voucher ID by address:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch voucher ID'
+    }
+  }
+}
+
 // Get User Vouchers (for recipients) - using blockchain data
 export const getUserVouchers = async (userAddress: string, collectionAddress?: string) => {
   try {

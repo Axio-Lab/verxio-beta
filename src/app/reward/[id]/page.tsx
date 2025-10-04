@@ -10,6 +10,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import "react-toastify/dist/ReactToastify.css";
 import { getRewardLink, claimRewardLink } from '@/app/actions/reward';
 import { getVoucherDetails } from '@/lib/voucher/getVoucherDetails';
+import { getVoucherIdByAddress, redeemVoucher, cancelVoucher, extendVoucherExpiry } from '@/app/actions/voucher';
 import { VerxioLoaderWhite } from '@/components/ui/verxio-loader-white';
 import { AppButton } from '@/components/ui/app-button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,17 @@ export default function ClaimRewardPage() {
   const [withdrawSignature, setWithdrawSignature] = useState('');
   const [withdrawAmountSuccess, setWithdrawAmountSuccess] = useState(0);
   const [withdrawSymbol, setWithdrawSymbol] = useState('');
+
+  // Modal states for voucher operations
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [voucherModalType, setVoucherModalType] = useState<'redeem' | 'cancel' | 'extend' | null>(null);
+  const [voucherOperationLoading, setVoucherOperationLoading] = useState(false);
+  const [voucherModalError, setVoucherModalError] = useState<string | null>(null);
+  const [redeemAmount, setRedeemAmount] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [newExpiryDate, setNewExpiryDate] = useState('');
+  const [operationSuccess, setOperationSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const rewardId = params.id as string;
 
@@ -238,6 +250,7 @@ export default function ClaimRewardPage() {
         const result = await getVoucherDetails(rewardDetails.voucherAddress);
         if (result.success && result.data) {
           setVoucherDetails(result.data);
+          console.log('🔍 Voucher Details Result:', result.data);
         }
       } catch (error) {
         console.error('Error fetching voucher details:', error);
@@ -395,6 +408,127 @@ export default function ClaimRewardPage() {
       });
     } finally {
       setIsWithdrawing(false);
+    }
+  };
+
+  // Voucher operation handlers
+  const handleRedeemVoucher = async () => {
+    if (!user?.wallet?.address || !rewardDetails?.voucherAddress || !redeemAmount) return;
+
+    setVoucherOperationLoading(true);
+    setVoucherModalError(null);
+    try {
+      // Get voucher ID by address
+      const voucherIdResult = await getVoucherIdByAddress(rewardDetails.voucherAddress, user.wallet.address);
+      if (!voucherIdResult.success) {
+        setVoucherModalError(voucherIdResult.error || 'Failed to find voucher');
+        return;
+      }
+
+      // Redeem voucher using existing function
+      const result = await redeemVoucher(voucherIdResult.voucherId, user.wallet.address, user.wallet.address, parseFloat(redeemAmount));
+      
+      if (result.success && 'result' in result && result.result?.success) {
+        setSuccessMessage('Voucher redeemed successfully!');
+        setOperationSuccess(true);
+        setShowVoucherModal(false);
+        setVoucherModalType(null);
+        setRedeemAmount('');
+        
+        // Refresh voucher details
+        if (rewardDetails?.voucherAddress) {
+          await getVoucherDetails(rewardDetails.voucherAddress);
+        }
+      } else {
+        const errorMessage = ('result' in result && result.result?.errors?.[0]) || result.error || 'Failed to redeem voucher';
+        setVoucherModalError(errorMessage);
+      }
+    } catch (error) {
+      console.error('Redeem voucher error:', error);
+      setVoucherModalError('Failed to redeem voucher');
+    } finally {
+      setVoucherOperationLoading(false);
+    }
+  };
+
+  const handleCancelVoucher = async () => {
+    if (!user?.wallet?.address || !rewardDetails?.voucherAddress) return;
+
+    setVoucherOperationLoading(true);
+    setVoucherModalError(null);
+    try {
+      // Get voucher ID by address
+      const voucherIdResult = await getVoucherIdByAddress(rewardDetails.voucherAddress, user.wallet.address);
+      if (!voucherIdResult.success) {
+        setVoucherModalError(voucherIdResult.error || 'Failed to find voucher');
+        return;
+      }
+
+      // Cancel voucher using existing function
+      const result = await cancelVoucher(voucherIdResult.voucherId, cancelReason || 'Voucher cancelled by creator', user.wallet.address);
+      
+      if (result.success && 'result' in result && result.result?.success) {
+        setSuccessMessage('Voucher cancelled successfully!');
+        setOperationSuccess(true);
+        setShowVoucherModal(false);
+        setVoucherModalType(null);
+        setCancelReason('');
+        
+        // Refresh voucher details
+        if (rewardDetails?.voucherAddress) {
+          await getVoucherDetails(rewardDetails.voucherAddress);
+        }
+      } else {
+        const errorMessage = ('result' in result && result.result?.errors?.[0]) || result.error || 'Failed to cancel voucher';
+        setVoucherModalError(errorMessage);
+      }
+    } catch (error) {
+      console.error('Cancel voucher error:', error);
+      setVoucherModalError('Failed to cancel voucher');
+    } finally {
+      setVoucherOperationLoading(false);
+    }
+  };
+
+  const handleExtendVoucherExpiry = async () => {
+    if (!user?.wallet?.address || !rewardDetails?.voucherAddress || !newExpiryDate) return;
+
+    setVoucherOperationLoading(true);
+    setVoucherModalError(null);
+    try {
+      // Get voucher ID by address
+      const voucherIdResult = await getVoucherIdByAddress(rewardDetails.voucherAddress, user.wallet.address);
+      if (!voucherIdResult.success) {
+        setVoucherModalError(voucherIdResult.error || 'Failed to find voucher');
+        return;
+      }
+
+      // Set the expiry date to the end of the selected day
+      const updatedExpiryDate = new Date(new Date(newExpiryDate).setHours(23, 59, 59, 999) + 24 * 60 * 60 * 1000);
+
+      // Extend voucher expiry using existing function
+      const result = await extendVoucherExpiry(voucherIdResult.voucherId, updatedExpiryDate, user.wallet.address);
+      
+      if (result.success && 'result' in result && result.result?.success) {
+        setSuccessMessage('Voucher expiry extended successfully!');
+        setOperationSuccess(true);
+        setShowVoucherModal(false);
+        setVoucherModalType(null);
+        setNewExpiryDate('');
+        
+        // Refresh voucher details
+        if (rewardDetails?.voucherAddress) {
+          await getVoucherDetails(rewardDetails.voucherAddress);
+        }
+      } else {
+        const errorMessage = ('result' in result && result.result?.errors?.[0]) || result.error || 'Failed to extend voucher expiry';
+        setVoucherModalError(errorMessage);
+      }
+    } catch (error) {
+      console.error('Extend voucher expiry error:', error);
+      setVoucherModalError('Failed to extend voucher expiry');
+    } finally {
+      setVoucherOperationLoading(false);
     }
   };
 
@@ -584,6 +718,21 @@ export default function ClaimRewardPage() {
                     </div>
                   )}
 
+                  {voucherDetails?.voucherData?.status && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/60 text-sm">Status</span>
+                      <span className={`font-medium ${
+                        voucherDetails.voucherData.status === 'active' ? 'text-green-400' :
+                        voucherDetails.voucherData.status === 'used' ? 'text-blue-400' :
+                        voucherDetails.voucherData.status === 'cancelled' ? 'text-red-400' :
+                        voucherDetails.voucherData.status === 'expired' ? 'text-orange-400' :
+                        'text-white'
+                      }`}>
+                        {voucherDetails.voucherData.status.toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Expires row replaced by countdown banner above */}
 
                   <div className="flex justify-between items-center">
@@ -618,12 +767,14 @@ export default function ClaimRewardPage() {
 
 
               {/* Claim Button or Status Message */}
-              {rewardDetails.status === 'claimed' ? (
+              {rewardDetails.status === 'claimed' && rewardDetails.creator !== user?.wallet?.address ? (
                 <div className="space-y-4">
                   <div className="p-4 bg-green-500/20 border border-green-500/40 rounded-lg text-center">
                     <h3 className="text-lg font-semibold text-green-400">Reward Claimed</h3>
                   </div>
-                  {authenticated && voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && voucherDetails?.owner === user?.wallet?.address ? (
+                  
+                  {/* Withdraw functionality for token vouchers - Show for voucher owner only */}
+                  {authenticated && rewardDetails.creator !== user?.wallet?.address && voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && voucherDetails?.owner === user?.wallet?.address ? (
                     <div className="space-y-2">
                       {isLoadingBalance ? (
                         <div className="text-center text-xs text-white/60">Checking balance...</div>
@@ -666,7 +817,65 @@ export default function ClaimRewardPage() {
                     </div>
                   ) : null}
                 </div>
-              ) : authenticated ? (
+              ) : null}
+
+              {/* Merchant Management for Claimed Rewards - Show for creator only */}
+              {rewardDetails.status === 'claimed' && authenticated && rewardDetails.creator === user?.wallet?.address && voucherDetails && (
+                <div className="space-y-4">
+                  {/* Horizontal Divider */}
+                  <div className="border-t border-white/10"></div>
+                  
+                  <div className="text-center text-sm text-white/60 mb-3">
+                    Manage this voucher as the creator
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                        {voucherDetails.voucherData?.status === 'active' && !voucherDetails.voucherData?.isExpired &&  voucherDetails.voucherData?.type?.toLowerCase() !== 'token' && (
+                          <button
+                            onClick={() => {
+                              setVoucherModalType('redeem');
+                              setShowVoucherModal(true);
+                              setRedeemAmount(((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0).toString());
+                              setVoucherModalError(null);
+                            }}
+                            className="px-3 py-2 bg-green-600/20 hover:bg-green-600/30 border border-green-600/30 rounded text-green-400 text-sm transition-colors"
+                          >
+                            Redeem
+                          </button>
+                        )}
+                    
+                    {voucherDetails.voucherData?.status === 'active' && (
+                      <button
+                        onClick={() => {
+                          setVoucherModalType('cancel');
+                          setShowVoucherModal(true);
+                          setCancelReason('Voucher cancelled by creator');
+                          setVoucherModalError(null);
+                        }}
+                        className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 rounded text-red-400 text-sm transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    
+                    {(voucherDetails.voucherData?.status === 'used' || voucherDetails.voucherData?.status === 'active' || voucherDetails.voucherData?.isExpired) && (
+                      <button
+                        onClick={() => {
+                          setVoucherModalType('extend');
+                          setShowVoucherModal(true);
+                          setNewExpiryDate('');
+                          setVoucherModalError(null);
+                        }}
+                        className="px-3 py-2 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 rounded text-orange-400 text-sm transition-colors"
+                      >
+                        Extend Expiry
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Unclaimed Reward - Show claim button for non-creators */}
+              {rewardDetails.status !== 'claimed' && authenticated && rewardDetails.creator !== user?.wallet?.address && (
                 <AppButton
                   onClick={handleClaimReward}
                   disabled={isClaiming || isExpired}
@@ -689,7 +898,10 @@ export default function ClaimRewardPage() {
                     </>
                   )}
                 </AppButton>
-              ) : (
+              )}
+
+              {/* Login button for unauthenticated users */}
+              {!authenticated && rewardDetails.status !== 'claimed' && (
                 <AppButton
                   onClick={login}
                   disabled={isExpired}
@@ -927,6 +1139,171 @@ export default function ClaimRewardPage() {
           </div>
         </div>
       )}
+
+      {/* Voucher Operation Modal */}
+      {showVoucherModal && voucherModalType && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold text-lg">
+                {voucherModalType === 'redeem' && 'Confirm Voucher Redemption'}
+                {voucherModalType === 'cancel' && 'Confirm Voucher Cancellation'}
+                {voucherModalType === 'extend' && 'Extend Voucher Expiry'}
+              </h3>
+            </div>
+
+            <div className="space-y-4">
+              {voucherModalType === 'redeem' && (
+                <>
+                  <div className="text-center">
+                    <div className="text-white/80 mb-4">
+                      You're about to redeem{' '}
+                      <span className="text-green-400 font-medium">
+                        {voucherDetails?.voucherData?.type?.toLowerCase() || rewardDetails?.voucherType?.toLowerCase()}
+                      </span>{' '}
+                      voucher for{' '}
+                      <span className="text-blue-400 font-medium">
+                        {((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails?.voucherWorth) || 0).toLocaleString()} {rewardDetails?.symbol || 'USD'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-white text-sm mb-2 block">Redemption Amount</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={redeemAmount}
+                      onChange={(e) => setRedeemAmount(e.target.value)}
+                      placeholder="Enter redemption amount"
+                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                    />
+                    <div className="text-xs text-white/60 mt-1">
+                      Max: {((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails?.voucherWorth) || 0).toLocaleString()} {rewardDetails?.symbol || 'USD'}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {voucherModalType === 'cancel' && (
+                <>
+                  <div className="text-center">
+                    <div className="text-white/80 mb-4">
+                      You're about to cancel the{' '}
+                      <span className="text-red-400 font-medium">
+                        {voucherDetails?.voucherData?.type?.toLowerCase() || rewardDetails?.voucherType?.toLowerCase()}
+                      </span>{' '}
+                      voucher
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-white text-sm mb-2 block">Cancellation Reason</Label>
+                    <Input
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      placeholder="Enter reason for cancellation"
+                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
+              {voucherModalType === 'extend' && (
+                <>
+                  <div>
+                    <Label className="text-white text-sm mb-2 block">New Expiry Date</Label>
+                    <Input
+                      type="date"
+                      value={newExpiryDate}
+                      onChange={(e) => setNewExpiryDate(e.target.value)}
+                      className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Modal Error Display */}
+              {voucherModalError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm font-medium">{voucherModalError}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <AppButton
+                  onClick={() => {
+                    setShowVoucherModal(false);
+                    setVoucherModalType(null);
+                    setRedeemAmount('');
+                    setCancelReason('');
+                    setNewExpiryDate('');
+                    setVoucherModalError(null);
+                  }}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  Cancel
+                </AppButton>
+                <AppButton
+                  onClick={() => {
+                    if (voucherModalType === 'redeem') {
+                      handleRedeemVoucher();
+                    } else if (voucherModalType === 'cancel') {
+                      handleCancelVoucher();
+                    } else if (voucherModalType === 'extend') {
+                      handleExtendVoucherExpiry();
+                    }
+                  }}
+                  disabled={
+                    (voucherModalType === 'extend' && !newExpiryDate) ||
+                    (voucherModalType === 'redeem' && (!redeemAmount || parseFloat(redeemAmount) <= 0 || parseFloat(redeemAmount) > ((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails?.voucherWorth) || 0))) ||
+                    (voucherModalType === 'cancel' && !cancelReason.trim()) ||
+                    voucherOperationLoading
+                  }
+                  className="flex-1"
+                >
+                  {voucherOperationLoading ? (
+                    <VerxioLoaderWhite size="sm" />
+                  ) : (
+                    <>
+                      {voucherModalType === 'redeem' && 'Confirm Redeem'}
+                      {voucherModalType === 'cancel' && 'Confirm Cancel'}
+                      {voucherModalType === 'extend' && 'Extend Expiry'}
+                    </>
+                  )}
+                </AppButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Operation Success Modal */}
+      {operationSuccess && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-8 w-full max-w-md mx-auto text-center">
+            <div className="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-white font-semibold text-xl mb-2">Success!</h3>
+            <p className="text-white/80 mb-6">{successMessage}</p>
+            <AppButton
+              onClick={() => {
+                setOperationSuccess(false);
+                setSuccessMessage('');
+              }}
+              className="w-full"
+            >
+              Continue
+            </AppButton>
+          </div>
+        </div>
+      )}
+
       <ToastContainer
         position="top-right"
         autoClose={5000}
