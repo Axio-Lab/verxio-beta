@@ -351,29 +351,84 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
     // Fetch collection details from blockchain
     const details = await getVoucherCollectionDetails(collectionPublicKey);
     
-    // Return basic voucher info immediately, details will be loaded progressively in frontend
+    // Fetch detailed voucher information from blockchain
     const vouchers = collection.vouchers;
-    const vouchersWithBasicInfo = vouchers.map((voucher: any) => ({
-      ...voucher,
-      recipient: voucher.recipient, // Keep the wallet address for now
-      voucherName: 'Loading...',
-      voucherType: 'Loading...',
-      value: 0,
-      symbol: 'USDC',
-      description: '',
-      expiryDate: '',
-      maxUses: 1,
-      currentUses: 0,
-      transferable: true,
-      status: 'active',
-      merchantId: '',
-      conditions: '',
-      image: null,
-      isExpired: false,
-      canRedeem: false,
-      voucherData: null,
-      isLoadingDetails: true // Flag to indicate details are being loaded
-    }));
+    const vouchersWithDetails = await Promise.all(
+      vouchers.map(async (voucher: any) => {
+        try {
+          const voucherDetails = await getVoucherDetails(voucher.voucherPublicKey);
+          if (voucherDetails.success && voucherDetails.data) {
+            return {
+              ...voucher,
+              voucherName: voucherDetails.data.name || 'Unknown Voucher',
+              voucherType: voucherDetails.data.attributes.voucherType || 'Unknown',
+              value: voucherDetails.data.voucherData?.value || 0,
+              symbol: voucherDetails.data.symbol || 'USDC',
+              description: voucherDetails.data.description || '',
+              expiryDate: voucherDetails.data.voucherData?.expiryDate ? new Date(voucherDetails.data.voucherData.expiryDate).toISOString() : '',
+              maxUses: voucherDetails.data.voucherData?.maxUses || 1,
+              currentUses: voucherDetails.data.voucherData?.currentUses || 0,
+              transferable: voucherDetails.data.voucherData?.transferable ?? true,
+              status: voucherDetails.data.voucherData?.status || 'active',
+              merchantId: voucherDetails.data.voucherData?.merchantId || '',
+              conditions: Array.isArray(voucherDetails.data.voucherData?.conditions) 
+                ? voucherDetails.data.voucherData.conditions.join(', ') 
+                : voucherDetails.data.voucherData?.conditions || '',
+              image: voucherDetails.data.image || null,
+              isExpired: voucherDetails.data.isExpired || false,
+              canRedeem: voucherDetails.data.canRedeem || false,
+              voucherData: voucherDetails.data.voucherData || null,
+              isLoadingDetails: false
+            };
+          } else {
+            // Fallback if voucher details fetch fails
+            return {
+              ...voucher,
+              voucherName: 'Unknown Voucher',
+              voucherType: 'Unknown',
+              value: 0,
+              symbol: 'USDC',
+              description: '',
+              expiryDate: '',
+              maxUses: 1,
+              currentUses: 0,
+              transferable: true,
+              status: 'active',
+              merchantId: '',
+              conditions: '',
+              image: null,
+              isExpired: false,
+              canRedeem: false,
+              voucherData: null,
+              isLoadingDetails: false
+            };
+          }
+        } catch (error) {
+          console.error('Error fetching voucher details:', error);
+          // Fallback if voucher details fetch fails
+          return {
+            ...voucher,
+            voucherName: 'Unknown Voucher',
+            voucherType: 'Unknown',
+            value: 0,
+            symbol: 'USDC',
+            description: '',
+            expiryDate: '',
+            maxUses: 1,
+            currentUses: 0,
+            transferable: true,
+            status: 'active',
+            merchantId: '',
+            conditions: '',
+            image: null,
+            isExpired: false,
+            canRedeem: false,
+            voucherData: null,
+            isLoadingDetails: false
+          };
+        }
+      })
+    );
     
     return {
       success: true,
@@ -383,7 +438,7 @@ export const getVoucherCollectionByPublicKey = async (collectionPublicKey: strin
         collectionImage: details.success ? details.data?.image : null,
         voucherStats: details.success ? details.data?.voucherStats : null,
         blockchainDetails: details.success ? details.data : null,
-        vouchers: vouchersWithBasicInfo
+        vouchers: vouchersWithDetails
       }
     }
   } catch (error: any) {
@@ -648,6 +703,15 @@ export const validateVoucher = async (voucherId: string, creatorAddress: string)
 // Redeem Voucher
 export const redeemVoucher = async (voucherId: string, merchantId: string, creatorAddress: string, redemptionAmount?: number) => {
   try {
+    // Check if user has sufficient Verxio credits (250 required)
+    const creditCheck = await getUserVerxioCreditBalance(creatorAddress)
+    if (!creditCheck.success || (creditCheck.balance || 0) < 250) {
+      return {
+        success: false,
+        error: `Insufficient Verxio credits. You need at least 250 credits to redeem a voucher. Current balance: ${creditCheck.balance || 0} credits.`
+      }
+    }
+
     // Get voucher details
     const voucher = await prisma.voucher.findFirst({
       where: {
@@ -707,7 +771,22 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
         totalAmount: redemptionAmount
       }
     })
- 
+
+    // Deduct 250 Verxio credits for voucher redemption
+    if (redeemResult.success) {
+      const deductionResult = await awardOrRevokeLoyaltyPoints({
+        creatorAddress,
+        points: 250,
+        assetAddress: voucher.voucherPublicKey,
+        assetOwner: creatorAddress,
+        action: 'REVOKE'
+      })
+
+      if (!deductionResult.success) {
+        console.error('Failed to deduct Verxio credits for redemption:', deductionResult.error)
+      }
+    }
+
     // Note: Voucher status and usage details are now managed on-chain
 
     return redeemResult
@@ -723,6 +802,15 @@ export const redeemVoucher = async (voucherId: string, merchantId: string, creat
 // Cancel Voucher
 export const cancelVoucher = async (voucherId: string, reason: string, creatorAddress: string) => {
   try {
+    // Check if user has sufficient Verxio credits (250 required)
+    const creditCheck = await getUserVerxioCreditBalance(creatorAddress)
+    if (!creditCheck.success || (creditCheck.balance || 0) < 250) {
+      return {
+        success: false,
+        error: `Insufficient Verxio credits. You need at least 250 credits to cancel a voucher. Current balance: ${creditCheck.balance || 0} credits.`
+      }
+    }
+
     // Get voucher details
     const voucher = await prisma.voucher.findFirst({
       where: {
@@ -778,6 +866,21 @@ export const cancelVoucher = async (voucherId: string, reason: string, creatorAd
       reason
     })
 
+    // Deduct 250 Verxio credits for voucher cancellation
+    if (cancelResult.success) {
+      const deductionResult = await awardOrRevokeLoyaltyPoints({
+        creatorAddress,
+        points: 250,
+        assetAddress: voucher.voucherPublicKey,
+        assetOwner: creatorAddress,
+        action: 'REVOKE'
+      })
+
+      if (!deductionResult.success) {
+        console.error('Failed to deduct Verxio credits for cancellation:', deductionResult.error)
+      }
+    }
+
     // Note: Voucher status is now managed on-chain
 
     return cancelResult
@@ -793,6 +896,15 @@ export const cancelVoucher = async (voucherId: string, reason: string, creatorAd
 // Extend Voucher Expiry
 export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date, creatorAddress: string) => {
   try {
+    // Check if user has sufficient Verxio credits (250 required)
+    const creditCheck = await getUserVerxioCreditBalance(creatorAddress)
+    if (!creditCheck.success || (creditCheck.balance || 0) < 250) {
+      return {
+        success: false,
+        error: `Insufficient Verxio credits. You need at least 250 credits to extend voucher expiry. Current balance: ${creditCheck.balance || 0} credits.`
+      }
+    }
+
     // Get voucher details
     const voucher = await prisma.voucher.findFirst({
       where: {
@@ -848,6 +960,21 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
       newExpiryDate: newExpiryDate.getTime() // Keep in milliseconds to match mint voucher logic
     })
 
+    // Deduct 250 Verxio credits for voucher expiry extension
+    if (extendResult.success) {
+      const deductionResult = await awardOrRevokeLoyaltyPoints({
+        creatorAddress,
+        points: 250,
+        assetAddress: voucher.voucherPublicKey,
+        assetOwner: creatorAddress,
+        action: 'REVOKE'
+      })
+
+      if (!deductionResult.success) {
+        console.error('Failed to deduct Verxio credits for expiry extension:', deductionResult.error)
+      }
+    }
+
     // Note: Voucher expiry is now managed on-chain
 
     return extendResult
@@ -856,6 +983,41 @@ export const extendVoucherExpiry = async (voucherId: string, newExpiryDate: Date
     return {
       success: false,
       error: error.message || 'Failed to extend voucher expiry'
+    }
+  }
+}
+
+// Get Voucher ID by Address (helper function for reward page)
+export const getVoucherIdByAddress = async (voucherAddress: string, creatorAddress: string) => {
+  try {
+    const voucher = await prisma.voucher.findFirst({
+      where: {
+        voucherPublicKey: voucherAddress,
+        collection: {
+          creator: creatorAddress
+        }
+      },
+      select: {
+        id: true
+      }
+    })
+
+    if (!voucher) {
+      return {
+        success: false,
+        error: 'Voucher not found'
+      }
+    }
+
+    return {
+      success: true,
+      voucherId: voucher.id
+    }
+  } catch (error: any) {
+    console.error('Error fetching voucher ID by address:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch voucher ID'
     }
   }
 }

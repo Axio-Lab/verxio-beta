@@ -2016,7 +2016,7 @@ export default function VoucherCollectionDetailPage() {
 
                       {/* Voucher Operations */}
                       <div className="flex flex-wrap gap-2">
-                        {voucher.canRedeem && !voucher.isExpired && voucher.status === 'active' && (
+                        {voucher.canRedeem && !voucher.isExpired && voucher.status === 'active' && voucher.voucherType.toLowerCase() !== 'token' && (
                           <button
                             onClick={() => {
                               setModalVoucherId(voucher.id);
@@ -2175,12 +2175,12 @@ export default function VoucherCollectionDetailPage() {
                         type="number"
                         step="0.01"
                         value={redeemAmount}
-                        readOnly
-                        placeholder="Redemption amount"
-                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm cursor-not-allowed"
+                        onChange={(e) => setRedeemAmount(e.target.value)}
+                        placeholder="Enter redemption amount"
+                        className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                       />
                       <div className="text-xs text-white/60 mt-1">
-                        Voucher value: {collection?.vouchers.find(v => v.id === modalVoucherId)?.value?.toLocaleString()} {collection?.vouchers.find(v => v.id === modalVoucherId)?.symbol || 'USDC'}
+                        Max: {(collection?.vouchers.find(v => v.id === modalVoucherId)?.voucherData?.remainingWorth ?? collection?.vouchers.find(v => v.id === modalVoucherId)?.value)?.toLocaleString()} {collection?.vouchers.find(v => v.id === modalVoucherId)?.symbol || 'USDC'}
                       </div>
                     </div>
                   </>
@@ -2256,7 +2256,7 @@ export default function VoucherCollectionDetailPage() {
                     }}
                     disabled={
                       (modalType === 'extend' && !newExpiryDate) ||
-                      (modalType === 'redeem' && (!redeemAmount || parseFloat(redeemAmount) <= 0)) ||
+                      (modalType === 'redeem' && (!redeemAmount || parseFloat(redeemAmount) <= 0 || parseFloat(redeemAmount) > ((collection?.vouchers.find(v => v.id === modalVoucherId)?.voucherData?.remainingWorth ?? collection?.vouchers.find(v => v.id === modalVoucherId)?.value) || 0))) ||
                       operationLoading
                     }
                     className="flex-1"
