@@ -250,7 +250,6 @@ export default function ClaimRewardPage() {
         const result = await getVoucherDetails(rewardDetails.voucherAddress);
         if (result.success && result.data) {
           setVoucherDetails(result.data);
-          console.log('🔍 Voucher Details Result:', result.data);
         }
       } catch (error) {
         console.error('Error fetching voucher details:', error);

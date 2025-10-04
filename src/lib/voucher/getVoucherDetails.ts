@@ -5,6 +5,9 @@ export interface VoucherDetails {
   name: string;
   description: string;
   image: string;
+  symbol: string; // Asset symbol (e.g., USDC, BTC, etc.)
+  isExpired: boolean; // Whether the voucher has expired
+  canRedeem: boolean; // Whether the voucher can be redeemed
   attributes: {
     voucherType: string;
     maxUses: string;
@@ -149,11 +152,28 @@ export const getVoucherDetails = async (voucherAddress: string): Promise<{
       ? calculateRemainingWorth(originalValue, redemptionHistory)
       : originalValue;
 
+    // Calculate if voucher is expired
+    const currentTime = Date.now();
+    const expiryTimestamp = voucherData.expiry_date || 0;
+    const isExpired = expiryTimestamp > 0 && currentTime > expiryTimestamp;
+
+    // Calculate if voucher can be redeemed
+    const canRedeem = !isExpired && 
+                     (voucherData.status === 'active' || voucherData.status === 'Active') && 
+                     (voucherData.current_uses || 0) < (voucherData.max_uses || 1) &&
+                     remainingWorth > 0;
+
+    // Get symbol from attributes
+    const symbol = assetSymbolAttr?.value || 'USDC';
+
     const voucherDetails: VoucherDetails = {
       id: asset.id,
       name: metadata?.name || 'Unknown Voucher',
       description: metadata?.description || '',
       image: asset.content?.links?.image || '',
+      symbol: symbol,
+      isExpired: isExpired,
+      canRedeem: canRedeem,
       attributes: {
         voucherType: voucherTypeAttr?.value || '',
         maxUses: maxUsesAttr?.value || '1',

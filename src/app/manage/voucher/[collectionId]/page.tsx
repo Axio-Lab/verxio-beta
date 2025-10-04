@@ -1963,7 +1963,6 @@ export default function VoucherCollectionDetailPage() {
               <>
                 <div className="space-y-3">
                   {currentVouchers.map((voucher) => {
-                    console.log('🎫 Individual Voucher:', voucher);
                     return (
                     <div key={voucher.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
                       <div className="flex items-center justify-between mb-3">
