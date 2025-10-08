@@ -12,9 +12,11 @@ import { VerxioLoaderWhite } from "@/components/ui/verxio-loader-white";
 
 import { Transaction, Connection, VersionedTransaction, PublicKey } from "@solana/web3.js";
 import { awardLoyaltyPointsAfterPurchase, checkUserLoyaltyMembership, fetchLoyaltyProgramDetails } from "./loyalty-actions";
+import { getUserVouchers, payWithVoucher } from "./voucher-actions";
 import { updatePaymentStatus, sponsorTransaction } from "@/app/actions/payment";
 import { getUserStats } from "@/app/actions/stats";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import "react-toastify/dist/ReactToastify.css";
 
 interface PaymentData {
@@ -75,6 +77,18 @@ const Page = () => {
   const [userBalance, setUserBalance] = useState<string>('0.00');
   const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(true);
   const statusCheckTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Voucher payment states
+  const [userVouchers, setUserVouchers] = useState<Array<{
+    id: string;
+    voucherPublicKey: string;
+    name: string;
+    balance: number;
+    collectionName?: string;
+  }>>([]);
+  const [selectedVoucher, setSelectedVoucher] = useState<string>('');
+  const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
+  const [useVoucherPayment, setUseVoucherPayment] = useState(false);
 
   const loadData = useCallback(
     async () => {
@@ -148,6 +162,30 @@ const Page = () => {
     }
   }, [data?.loyaltyProgramAddress]);
 
+  const loadUserVouchers = useCallback(async () => {
+    if (!user?.wallet?.address) {
+      return;
+    }
+
+    setIsLoadingVouchers(true);
+    try {
+      const result = await getUserVouchers(user.wallet.address);
+      console.log('Voucher fetch result:', result);
+      if (result.success && result.vouchers) {
+        console.log('Setting vouchers:', result.vouchers);
+        setUserVouchers(result.vouchers);
+      } else {
+        console.error('Failed to fetch user vouchers:', result.error);
+        setUserVouchers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching user vouchers:', error);
+      setUserVouchers([]);
+    } finally {
+      setIsLoadingVouchers(false);
+    }
+  }, [user?.wallet?.address]);
+
   const fetchUserBalance = useCallback(async () => {
     if (!user?.wallet?.address) return;
 
@@ -186,6 +224,13 @@ const Page = () => {
       loadLoyaltyProgramDetails();
     }
   }, [data?.loyaltyProgramAddress, loadLoyaltyProgramDetails]);
+
+  // Fetch user vouchers when user connects wallet
+  useEffect(() => {
+    if (authenticated && user?.wallet?.address) {
+      loadUserVouchers();
+    }
+  }, [authenticated, user?.wallet?.address, loadUserVouchers]);
 
   useEffect(() => {
     loadData();
@@ -301,7 +346,164 @@ const Page = () => {
         finalAmount = Math.max(0, finalAmount - discountAmount);
       }
 
-      // Step 1: Get transaction from backend with updated amount
+      // Handle voucher payment (partial or full)
+      if (useVoucherPayment && selectedVoucher) {
+        const selectedVoucherData = userVouchers.find(v => v.voucherPublicKey === selectedVoucher);
+        if (!selectedVoucherData) {
+          toast.error("Selected voucher not found");
+          setIsProcessing(false);
+          setTransactionStatus("idle");
+          setPaymentStep("");
+          return;
+        }
+
+        const voucherBalance = selectedVoucherData.balance;
+        const amountFromVoucher = Math.min(voucherBalance, finalAmount);
+        const amountFromWallet = finalAmount - amountFromVoucher;
+
+        // Process voucher withdrawal to merchant
+        setPaymentStep(`Withdrawing ${amountFromVoucher.toFixed(2)} USDC from voucher...`);
+        const voucherPaymentResult = await payWithVoucher(
+          selectedVoucher,
+          amountFromVoucher,
+          data.recipient,
+          user.wallet.address,
+          selectedVoucherData.id,
+          data.recipient // creator address for voucher operations
+        );
+
+        if (!voucherPaymentResult.success) {
+          throw new Error(voucherPaymentResult.error || 'Voucher payment failed');
+        }
+
+        let walletSignature = '';
+        
+        // If there's remaining amount, charge from wallet
+        if (amountFromWallet > 0) {
+          setPaymentStep(`Processing ${amountFromWallet.toFixed(2)} USDC from wallet...`);
+          
+          const { buildPaymentTransaction } = await import('@/app/actions/payment');
+          const buildResult = await buildPaymentTransaction({
+            reference: data.reference,
+            amount: amountFromWallet.toString(),
+            recipient: data.recipient,
+            userWallet: user.wallet.address
+          });
+
+          if (!buildResult.success || !buildResult.transaction) {
+            throw new Error(buildResult.error || 'Failed to build wallet transaction');
+          }
+
+          const { transaction: serializedTx, connection: connectionConfig, sponsored } = buildResult;
+          setIsSponsored(sponsored || false);
+
+          if (sponsored) {
+            const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
+            if (!wallets || wallets.length === 0) {
+              throw new Error('No Solana wallets available');
+            }
+
+            const versionedTransaction = new VersionedTransaction(transaction.compileMessage());
+            const serializedMessage = Buffer.from(versionedTransaction.message.serialize());
+            const { signMessage } = wallets[0];
+            const serializedUserSignature = await signMessage(serializedMessage);
+            versionedTransaction.addSignature(new PublicKey(wallets[0].address), serializedUserSignature);
+            const serializedUserSignedTx = Buffer.from(versionedTransaction.serialize()).toString('base64');
+
+            const sponsorResult = await sponsorTransaction({
+              reference: data.reference,
+              transaction: serializedUserSignedTx
+            });
+
+            if (!sponsorResult.success) {
+              throw new Error(sponsorResult.error || 'Failed to sponsor transaction');
+            }
+
+            walletSignature = sponsorResult.signature || '';
+          } else {
+            const transaction = Transaction.from(Buffer.from(serializedTx, 'base64'));
+            if (!wallets || wallets.length === 0) {
+              throw new Error('No Solana wallets available');
+            }
+
+            const result = await sendTransaction({
+              transaction: transaction,
+              connection: new Connection(connectionConfig.endpoint, 'confirmed'),
+              address: wallets[0].address
+            });
+
+            walletSignature = result.signature || '';
+          }
+        }
+
+        // Update payment status
+        setPaymentStep("Updating payment status...");
+        let discountAmountForDB = "0";
+        if (loyaltyMembership?.selectedDiscount) {
+          const discountText = loyaltyMembership.selectedDiscount;
+          if (discountText.includes('%')) {
+            const percentage = parseFloat(discountText.replace('%', ''));
+            discountAmountForDB = (parseFloat(data.amount) * (percentage / 100)).toString();
+          } else if (discountText.includes('$')) {
+            discountAmountForDB = discountText.replace('$', '');
+          }
+        }
+
+        const combinedSignature = walletSignature 
+          ? `${voucherPaymentResult.transaction?.signature}_${walletSignature}`
+          : voucherPaymentResult.transaction?.signature || `voucher_${selectedVoucher.slice(0, 8)}`;
+
+        const updateResult = await updatePaymentStatus(data.reference, {
+          status: "SUCCESS",
+          signature: combinedSignature,
+          loyaltyDiscount: discountAmountForDB,
+          amount: finalAmount.toString()
+        });
+
+        if (!updateResult.success) {
+          console.error("Failed to update payment status:", updateResult.error);
+        }
+
+        // Award loyalty points if applicable
+        if (data?.loyaltyProgramAddress && user?.wallet?.address) {
+          setPaymentStep("Awarding loyalty points...");
+          try {
+            const loyaltyResult = await awardLoyaltyPointsAfterPurchase(
+              user.wallet.address,
+              data.loyaltyProgramAddress,
+              parseFloat(data.amount)
+            );
+
+            if (loyaltyResult.success) {
+              toast.success(loyaltyResult.message, {
+                position: "top-right",
+                autoClose: 5000,
+                theme: "dark",
+              });
+            }
+          } catch (error) {
+            console.error("Failed to award loyalty points:", error);
+          }
+        }
+
+        setIsProcessing(false);
+        setTransactionStatus("success");
+        setTransactionSignature(combinedSignature);
+        setPaymentStep("");
+        
+        const message = amountFromWallet > 0
+          ? `Payment successful! ${amountFromVoucher.toFixed(2)} USDC from voucher, ${amountFromWallet.toFixed(2)} USDC from wallet`
+          : `Payment successful! ${amountFromVoucher.toFixed(2)} USDC from voucher`;
+        
+        toast.success(message);
+        
+        // Reload vouchers to show updated balance
+        await loadUserVouchers();
+        
+        return { success: true };
+      }
+
+      // Step 1: Get transaction from backend with updated amount (for wallet payments)
       const { buildPaymentTransaction } = await import('@/app/actions/payment');
       const buildResult = await buildPaymentTransaction({
         reference: data.reference,
@@ -468,6 +670,91 @@ const Page = () => {
     } else {
       login();
     }
+  };
+
+  // Helper function to check if payment button should be disabled
+  const isPaymentDisabled = () => {
+    if (!data) return true;
+    if (isProcessing || isCheckingLoyalty || isLoadingBalance) return true;
+    if (!!data?.loyaltyProgramAddress && !loyaltyProgramDetails) return true;
+    
+    const baseAmount = parseFloat(data?.amount || '0');
+    const fee = baseAmount * 0.005;
+    let discount = 0;
+    if (loyaltyMembership?.selectedDiscount) {
+      const discountText = loyaltyMembership.selectedDiscount;
+      if (discountText.includes('%')) {
+        const percentage = parseFloat(discountText.replace('%', ''));
+        discount = baseAmount * (percentage / 100);
+      } else if (discountText.includes('$')) {
+        discount = parseFloat(discountText.replace('$', ''));
+      }
+    }
+    const finalAmount = baseAmount - discount;
+    
+    // If using voucher, check combined balance
+    if (useVoucherPayment && selectedVoucher) {
+      const selectedVoucherData = userVouchers.find(v => v.voucherPublicKey === selectedVoucher);
+      if (!selectedVoucherData) return true;
+      
+      const voucherBalance = selectedVoucherData.balance;
+      const remainingAmount = Math.max(0, finalAmount - voucherBalance);
+      
+      // Check if wallet has enough for remaining amount (if any)
+      if (remainingAmount > 0) {
+        return parseFloat(userBalance) < (remainingAmount + fee);
+      }
+      return false; // Voucher covers full amount
+    }
+    
+    // For wallet-only payment
+    return parseFloat(userBalance) < (finalAmount + fee);
+  };
+
+  // Helper function to get button text
+  const getPaymentButtonText = () => {
+    if (!data) return 'Loading...';
+    if (isProcessing) return paymentStep || 'Processing...';
+    if (isCheckingLoyalty) return 'Checking eligible rewards';
+    if (!!data?.loyaltyProgramAddress && !loyaltyProgramDetails) return 'Loading Program...';
+    if (isLoadingBalance) return 'Checking Balance...';
+    
+    const baseAmount = parseFloat(data?.amount || '0');
+    const fee = baseAmount * 0.005;
+    let discount = 0;
+    if (loyaltyMembership?.selectedDiscount) {
+      const discountText = loyaltyMembership.selectedDiscount;
+      if (discountText.includes('%')) {
+        const percentage = parseFloat(discountText.replace('%', ''));
+        discount = baseAmount * (percentage / 100);
+      } else if (discountText.includes('$')) {
+        discount = parseFloat(discountText.replace('$', ''));
+      }
+    }
+    const finalAmount = baseAmount - discount;
+    
+    // Check if using voucher
+    if (useVoucherPayment && selectedVoucher) {
+      const selectedVoucherData = userVouchers.find(v => v.voucherPublicKey === selectedVoucher);
+      if (!selectedVoucherData) return 'Select Voucher';
+      
+      const voucherBalance = selectedVoucherData.balance;
+      const remainingAmount = Math.max(0, finalAmount - voucherBalance);
+      
+      if (remainingAmount > 0) {
+        if (parseFloat(userBalance) < (remainingAmount + fee)) {
+          return 'Insufficient Balance';
+        }
+        return `Pay (${voucherBalance.toFixed(2)} from voucher)`;
+      }
+      return `Pay with Voucher (${voucherBalance.toFixed(2)} USDC)`;
+    }
+    
+    // For wallet payment
+    if (parseFloat(userBalance) < (finalAmount + fee)) {
+      return 'Insufficient Balance';
+    }
+    return 'Pay Now';
   };
 
 
@@ -914,6 +1201,76 @@ const Page = () => {
 
 
 
+            {/* Voucher Payment Option */}
+            {authenticated && (
+              <div className="p-4 bg-black/20 rounded-lg border border-white/10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-white text-sm">Pay with Voucher</Label>
+                    {isLoadingVouchers && (
+                      <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
+                    )}
+                  </div>
+                  {userVouchers.length > 0 && (
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useVoucherPayment}
+                        onChange={(e) => {
+                          setUseVoucherPayment(e.target.checked);
+                          if (!e.target.checked) {
+                            setSelectedVoucher('');
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#00adef] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00adef]"></div>
+                    </label>
+                  )}
+                </div>
+
+                {/* Voucher Selection Dropdown */}
+                {isLoadingVouchers ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                    <span className="text-gray-400 text-sm ml-2">Loading vouchers...</span>
+                  </div>
+                ) : userVouchers.length === 0 ? (
+                  <div className="text-center py-4 text-gray-400 text-sm">
+                    No vouchers with balance available
+                  </div>
+                ) : useVoucherPayment ? (
+                  <div className="mt-3">
+                    <Select value={selectedVoucher} onValueChange={setSelectedVoucher}>
+                      <SelectTrigger className="bg-black/20 border-white/20 text-white h-12 w-full">
+                        <SelectValue placeholder="Select a voucher..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1a1a1a] border-white/20 text-white">
+                        {userVouchers.map((voucher) => (
+                          <SelectItem 
+                            key={voucher.id} 
+                            value={voucher.voucherPublicKey}
+                            className="text-white hover:bg-white/10 focus:bg-white/10 cursor-pointer"
+                          >
+                            <div className="flex flex-col py-1">
+                              <span className="font-medium text-sm text-white">{voucher.name}</span>
+                              <span className="text-xs text-gray-400">
+                                Balance: {voucher.balance.toFixed(2)} USDC
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="text-center py-2 text-gray-400 text-xs">
+                    {userVouchers.length} voucher{userVouchers.length !== 1 ? 's' : ''} available
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Wallet Connection */}
             <div className="space-y-4">
               {!authenticated ? (
@@ -925,84 +1282,18 @@ const Page = () => {
                 </button>
               ) : (
                 <button
-                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${isProcessing || isCheckingLoyalty || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails) || isLoadingBalance || parseFloat(userBalance) < (() => {
-                    const baseAmount = parseFloat(data.amount);
-                    const fee = baseAmount * 0.005;
-                    let discount = 0;
-                    if (loyaltyMembership?.selectedDiscount) {
-                      const discountText = loyaltyMembership.selectedDiscount;
-                      if (discountText.includes('%')) {
-                        const percentage = parseFloat(discountText.replace('%', ''));
-                        discount = baseAmount * (percentage / 100);
-                      } else if (discountText.includes('$')) {
-                        discount = parseFloat(discountText.replace('$', ''));
-                      }
-                    }
-                    return baseAmount + fee - discount;
-                  })()
-                    ? 'bg-gray-500 cursor-not-allowed opacity-50'
-                    : 'bg-[#00adef] cursor-pointer hover:opacity-80'
-                    }`}
+                  className={`font-light rounded-[8px] justify-center items-center flex text-[14px] text-white py-[10px] w-full transition-opacity gap-3 ${
+                    isPaymentDisabled()
+                      ? 'bg-gray-500 cursor-not-allowed opacity-50'
+                      : 'bg-[#00adef] cursor-pointer hover:opacity-80'
+                  }`}
                   onClick={CreateTransfer}
-                  disabled={isProcessing || isCheckingLoyalty || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails) || isLoadingBalance || parseFloat(userBalance) < (() => {
-                    const baseAmount = parseFloat(data.amount);
-                    const fee = baseAmount * 0.005;
-                    let discount = 0;
-                    if (loyaltyMembership?.selectedDiscount) {
-                      const discountText = loyaltyMembership.selectedDiscount;
-                      if (discountText.includes('%')) {
-                        const percentage = parseFloat(discountText.replace('%', ''));
-                        discount = baseAmount * (percentage / 100);
-                      } else if (discountText.includes('$')) {
-                        discount = parseFloat(discountText.replace('$', ''));
-                      }
-                    }
-                    return baseAmount + fee - discount;
-                  })()}
+                  disabled={isPaymentDisabled()}
                 >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {paymentStep || 'Processing...'}
-                    </>
-                  ) : isCheckingLoyalty ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Checking eligible rewards
-                    </>
-                  ) : (!!data.loyaltyProgramAddress && !loyaltyProgramDetails) ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading Program...
-                    </>
-                  ) : isLoadingBalance ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Checking Balance...
-                    </>
-                  ) : parseFloat(userBalance) < (() => {
-                    const baseAmount = parseFloat(data.amount);
-                    const fee = baseAmount * 0.005;
-                    let discount = 0;
-                    if (loyaltyMembership?.selectedDiscount) {
-                      const discountText = loyaltyMembership.selectedDiscount;
-                      if (discountText.includes('%')) {
-                        const percentage = parseFloat(discountText.replace('%', ''));
-                        discount = baseAmount * (percentage / 100);
-                      } else if (discountText.includes('$')) {
-                        discount = parseFloat(discountText.replace('$', ''));
-                      }
-                    }
-                    return baseAmount + fee - discount;
-                  })() ? (
-                    <>
-                      Insufficient Balance
-                    </>
-                  ) : (
-                    <>
-                      Pay Now
-                    </>
+                  {(isProcessing || isCheckingLoyalty || isLoadingBalance || (!!data.loyaltyProgramAddress && !loyaltyProgramDetails)) && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   )}
+                  {getPaymentButtonText()}
                 </button>
               )}
             </div>
