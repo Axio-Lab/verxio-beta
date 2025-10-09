@@ -632,7 +632,7 @@ export default function ClaimRewardPage() {
           <img src="/logo/verxioIconWhite.svg" alt="Verxio" className="w-full h-full" />
         </div>
         <div className="flex items-center gap-4">
-          {authenticated && (
+          {authenticated ? (
             <>
               <span className="text-white text-sm">
                 {user?.email?.address || `${user?.wallet?.address?.slice(0, 6)}...${user?.wallet?.address?.slice(-4)}`}
@@ -645,6 +645,13 @@ export default function ClaimRewardPage() {
                 Sign Out
               </button>
             </>
+          ) : (
+            <button
+              onClick={() => login()}
+              className="flex items-center gap-2 text-white hover:text-[#00adef] transition-colors text-sm px-4 py-2 border border-white/20 rounded-lg hover:border-[#00adef]/40"
+            >
+              Log in to continue
+            </button>
           )}
         </div>
       </header>
