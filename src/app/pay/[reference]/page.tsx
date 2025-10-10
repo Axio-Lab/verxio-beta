@@ -747,7 +747,7 @@ const Page = () => {
         }
         return `Pay (${voucherBalance.toFixed(2)} from voucher)`;
       }
-      return `Pay with Voucher (${voucherBalance.toFixed(2)} USDC)`;
+      return `Pay with your loyalty card (${voucherBalance.toFixed(2)} USDC)`;
     }
     
     // For wallet payment
@@ -1206,7 +1206,7 @@ const Page = () => {
               <div className="p-4 bg-black/20 rounded-lg border border-white/10">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Label className="text-white text-sm">Pay with Voucher</Label>
+                    <Label className="text-white text-sm">Pay with your Loyalty Card </Label>
                     {isLoadingVouchers && (
                       <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
                     )}
@@ -1233,11 +1233,11 @@ const Page = () => {
                 {isLoadingVouchers ? (
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                    <span className="text-gray-400 text-sm ml-2">Loading vouchers...</span>
+                    <span className="text-gray-400 text-sm ml-2">Loading loyalty cards...</span>
                   </div>
                 ) : userVouchers.length === 0 ? (
                   <div className="text-center py-4 text-gray-400 text-sm">
-                    No vouchers with balance available
+                    No prepaid loyalty cards with balance available
                   </div>
                 ) : useVoucherPayment ? (
                   <div className="mt-3">
