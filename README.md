@@ -1,19 +1,10 @@
-# Verxio Checkout
-
 <div align="center">
+  
+  **Grow your cashflow with prepaid loyalty cards**
   
   [![Verxio Protocol](https://img.shields.io/badge/Built%20with-Verxio%20Protocol-blue)](https://github.com/verxioprotocol)
   [![Solana](https://img.shields.io/badge/Blockchain-Solana-purple)](https://solana.com)
   [![Metaplex Core](https://img.shields.io/badge/Powered%20by-Metaplex%20Core-orange)](https://developers.metaplex.com/)
-  [![Next.js](https://img.shields.io/badge/Framework-Next.js%2015-black)](https://nextjs.org/)
-  [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-
-  **Grow your cashflow with prepaid loyalty cards**
-
-  [Demo](#-demo) •
-  [Features](#-key-features) •
-  [Architecture](#-architecture) •
-  [Getting Started](#-getting-started)
 
 </div>
 
@@ -32,13 +23,13 @@
 
 ## Overview
 
-Verxio's loyalty-native checkout experience with comprehensive loyalty program management, voucher systems, and reward distribution built on top of **[Verxio Protocol](https://github.com/verxioprotocol/verxio)** - an open-source, permissionless loyalty infrastructure  powered by [Metaplex Core NFTs](https://developers.metaplex.com/core) .
+Verxio's loyalty-native checkout experience with comprehensive loyalty program management, voucher systems, and reward distribution built on top of **[Verxio Protocol](https://github.com/Axio-Lab/verxioprotocol)** - an open-source, permissionless loyalty infrastructure  powered by [Metaplex Core NFTs](https://developers.metaplex.com/core).
 
 Verxio transforms real-world commerce by turning loyalty passes and vouchers into **Metaplex Core NFTs** that function as **autonomous wallets**. Unlike traditional loyalty programs, Verxio's loyalty assets can hold tokens, sign transactions, and make payments directly at checkout - enabling true prepaid loyalty cards that grow your business's cashflow.
 
 ### What is Verxio Protocol?
 
-**Verxio Protocol** is the first open-source permissionless onchain loyalty infrastructure that brings programmable loyalty to Web3 through **dynamic metadata programming** for real-world commerce. 
+**Verxio Protocol** is the first open-source permissionless on-chain loyalty infrastructure that brings programmable loyalty to Web3 through **dynamic metadata programming** for real-world commerce. 
 
 Built on top of Metaplex Core, Verxio provides:
 
@@ -61,7 +52,7 @@ Verxio leverages **Metaplex Core's plugin architecture** to create loyalty asset
 
 This enables **prepaid loyalty cards** where customers load value (USDC) onto their loyalty NFT and spend it while earning rewards - a true Web3 innovation for real-world commerce.
 
-🔗 **Learn More**: [Verxio Protocol GitHub](https://github.com/verxioprotocol/verxio) | [Documentation](https://docs.verxio.xyz)
+🔗 **Learn More**: [Documentation](https://docs.verxio.xyz)
 
 ---
 
@@ -93,13 +84,13 @@ Each loyalty pass is a **Metaplex Core NFT** that serves as both a membership ca
 - ✅ Makes payments directly at checkout
 - ✅ Earns loyalty points automatically on every transaction
 - ✅ Unlocks tier-based benefits and discounts
-- ✅ Remains under customer's custody (non-custodial)
+- ✅ Remains under the customer's custody (non-custodial)
 
 **How It Works:**
 1. Merchant creates a loyalty program collection using Metaplex Core
 2. Customer receives a loyalty pass NFT on first purchase or claim
 3. Customer can load USDC/tokens onto their loyalty NFT (prepaid balance)
-4. At checkout, customer pays with their loyalty NFT (autonomous wallet signs transaction)
+4. At checkout, the customer pays with their loyalty NFT (autonomous wallet signs the transaction)
 5. Points are automatically awarded and metadata updates on-chain
 6. Members progress through tiers based on accumulated XP
 7. Benefits, discounts, and exclusive perks unlock at each tier level
@@ -138,7 +129,7 @@ Shareable reward links for distributing vouchers and incentives:
 - **Reward Links**: Generate unique shareable URLs for reward distribution
 - **One-Click Claims**: Users claim rewards through simple authentication
 - **Multi-Format Support**: Support for all voucher types and tokens
-- **Escrow System**: Secure token transfers through escrow mechanism
+- **Escrow System**: Secure token transfers through an escrow mechanism
 - **Token Withdrawal**: Recipients can withdraw tokens from claimed vouchers
 - **Status Tracking**: Monitor claimed vs. unclaimed rewards
 - **QR Code Integration**: Generate QR codes for offline distribution
@@ -167,7 +158,7 @@ Token vouchers are **Metaplex Core NFTs that function as autonomous wallets**, c
 #### Features:
 - **Escrow Integration**: Secure token transfers to escrow or directly to voucher NFT addresses
 - **Balance Tracking**: Real-time token balance for each voucher NFT queried on-chain
-- **Partial Redemption**: Redeem portions of voucher value while maintaining remaining balance
+- **Partial Redemption**: Redeem portions of voucher value while maintaining the remaining balance
 - **Withdrawal System**: Transfer voucher tokens to external wallets via NFT signing authority
 - **Token Transfer Records**: Complete audit trail of all token movements to/from voucher NFTs
 - **Dynamic Metadata**: Token balance and voucher worth update in NFT metadata automatically
@@ -187,7 +178,7 @@ Revolutionary checkout experience where customers can pay directly using their *
 - **Autonomous Transaction Signing**: Loyalty NFTs sign payment transactions independently
 - **Earn While You Spend**: Payments made with loyalty NFTs automatically earn points
 - **Prepaid Balance Model**: Load tokens onto loyalty NFT and spend from prepaid balance
-- **Seamless Integration**: Works with standard Solana Pay protocol
+- **Seamless Integration**: Works with the standard Solana Pay protocol
 
 #### Additional Features:
 - **Solana Pay Integration**: Native Solana Pay protocol support
@@ -245,7 +236,7 @@ Verxio Checkout leverages **Metaplex Core's advanced NFT infrastructure** to cre
 #### How Autonomous Wallet Works
 
 1. **Token Loading**: Customer transfers USDC to their loyalty NFT's token account
-2. **Checkout Payment**: NFT authorizes transfer from its token account to merchant
+2. **Checkout Payment**: NFT authorizes transfer from its token account to the merchant
 3. **Point Award**: Merchant updates NFT's external plugin data (add points)
 4. **Metadata Update**: Dynamic metadata reflects new points and tier
 5. **Tier Progression**: Automatic tier upgrade when thresholds are met
@@ -276,7 +267,7 @@ Verxio Checkout leverages **Metaplex Core's advanced NFT infrastructure** to cre
 │  ┌────────────────────────────────────────────────┐    │
 │  │  Token Account (Holds Real USDC)               │    │
 │  │  - USDC Balance: 50.00                         │    │
-│  │  - Customer can withdraw to external wallet    │    │
+│  │  - Customer can withdraw to an external wallet    │    │
 │  │  - Can be used for payment at checkout         │    │
 │  └────────────────────────────────────────────────┘    │
 │                                                          │
@@ -290,7 +281,7 @@ Unlike traditional vouchers that are just database records, Verxio vouchers are 
 
 ```
 1. Customer Checkout
-   ├─> Option A: Pay with regular wallet
+   ├─> Option A: Pay with a regular wallet
    └─> Option B: Pay with loyalty NFT (autonomous wallet)
    
 2. Payment Transaction (If using Loyalty NFT)
@@ -308,7 +299,7 @@ Unlike traditional vouchers that are just database records, Verxio vouchers are 
    │   ├─> Award points via Verxio Protocol (updates external plugin)
    │   ├─> Update NFT's dynamic metadata (points, tier)
    │   ├─> Check tier threshold and upgrade if needed
-   │   └─> Deduct Verxio credits from merchant
+   │   └─> Deduct Verxio credits from the merchant
    │
    └─> If Not Member:
        ├─> Issue new Metaplex Core NFT loyalty pass (500 credits)
@@ -347,12 +338,12 @@ Unlike traditional vouchers that are just database records, Verxio vouchers are 
    ├─> Set NFT metadata: name, type, value, expiry
    ├─> Add external plugin with voucher data:
    │   └─> { type: "token", value: 10, token_address: USDC, max_uses: 1 }
-   ├─> Set up autonomous wallet for NFT
-   └─> Mint NFT to recipient address
+   ├─> Set up an autonomous wallet for NFT
+   └─> Mint NFT to the recipient address
    
 5. Token Transfer to NFT Wallet
    ├─> Create associated token account for voucher NFT
-   ├─> Transfer 10 USDC from merchant to NFT's token account
+   ├─> Transfer 10 USDC from the merchant to NFT's token account
    ├─> NFT now holds real USDC in its autonomous wallet
    └─> Record transfer in TokenTransferRecord
    
@@ -390,8 +381,8 @@ Unlike traditional vouchers that are just database records, Verxio vouchers are 
    ├─> If TOKEN voucher:
    │   ├─> Create Metaplex Core NFT with token metadata
    │   ├─> Add external plugin: { type: "token", value, token_address }
-   │   ├─> Mint NFT to user's wallet
-   │   ├─> Create NFT's associated token account
+   │   ├─> Mint NFT to the user's wallet
+   │   ├─> Create NFTs' associated token account
    │   ├─> Transfer tokens from escrow to NFT's autonomous wallet
    │   └─> NFT now holds real tokens (e.g., 10 USDC)
    │
@@ -420,7 +411,7 @@ Unlike traditional vouchers that are just database records, Verxio vouchers are 
 7. User Receives Metaplex Core NFT
    ├─> NFT appears in wallet (supports Metaplex standards)
    ├─> Displays voucher value, expiry, and redemption status
-   ├─> If token voucher: can withdraw tokens from NFT's wallet
+   ├─> If token voucher: can withdraw tokens from the NFT's wallet
    └─> Can use NFT for payment at Verxio Checkout
 ```
 
@@ -454,36 +445,7 @@ cd checkout
 
    Create a `.env.local` file in the root directory:
 
-   ```env
-# Authentication
-NEXT_PUBLIC_PRIVY_APP_ID=your_privy_app_id
-PRIVY_APP_SECRET=your_privy_app_secret
-
-# Solana & Blockchain
-HELIUS_API_KEY=your_helius_api_key
-RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
-PRIVATE_KEY=your_fee_payer_private_key_base58
-FEE_ADDRESS=your_fee_payer_public_address
-USDC_MINT=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
-
-# Treasury & Protocol
-TREASURY_WALLET=your_treasury_wallet_address
-AUTHORIZED_ADDRESS=your_admin_wallet_address
-
-# IPFS Storage (Pinata)
-PINATA_JWT=your_pinata_jwt_token
-NEXT_PUBLIC_PINATA_JWT=your_pinata_jwt_token
-NEXT_PUBLIC_GATEWAY_URL=your_pinata_gateway_url
-
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/verxio_checkout
-OPTIMIZE_API_KEY=your_prisma_optimize_key
-PRISMA_FIELD_ENCRYPTION_KEY=your_32_char_encryption_key
-
-# Optional: Escrow (for reward links)
-ESCROW_PRIVATE_KEY=escrow_wallet_private_key
-ESCROW_ADDRESS=escrow_wallet_public_address
-```
+   ```check env.example for variables```
 
 4. **Set up the database**
 ```bash
@@ -508,16 +470,10 @@ npm run db:push
 
 ---
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
 <div align="center">
   
   **Built with ❤️ by the Verxio Team**
   
-  [Website](https://verxio.xyz) • [GitHub](https://github.com/verxioprotocol) • [Twitter](https://twitter.com/verxioprotocol)
+  [Website](https://www.verxio.xyz) • [GitHub](https://github.com/Axio-Lab/verxio-beta) • [Twitter](https://twitter.com/verxioprotocol)
 
 </div>
