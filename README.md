@@ -58,6 +58,45 @@ This enables **prepaid loyalty cards** where customers load value (USDC) onto th
 
 ## Key Features
 
+### Loyalty Vouchers
+
+Multi-type voucher system for flexible promotional campaigns, powered by **Metaplex Core NFTs** with programmable redemption logic:
+
+#### Verxio Vouchers
+
+Every Verxio voucher is a **Metaplex Core NFT** with dynamic metadata and programmable commerce capabilities with real asset backing. Vouchers are **Metaplex Core NFTs that function as NFT-Based asset wallets**, capable of holding and managing real SPL tokens:
+
+- **Autonomous Wallet Technology**: Each voucher NFT is an independent wallet that can hold tokens
+- **Real Asset Backing**: Voucher NFTs hold actual SPL tokens (USDC, BONK, custom tokens) within their account
+- **Transaction Signing**: Vouchers can sign and authorize token transfers autonomously
+- **SPL Token Support**: Works with any Solana SPL token standard
+- **On-chain Token Management**: Token balance and metadata stored directly on the NFT
+
+#### Features:
+- **Escrow Integration**: Secure token transfers to escrow or directly to voucher NFT addresses
+- **Balance Tracking**: Real-time token balance for each voucher NFT queried on-chain
+- **Partial Redemption**: Redeem portions of voucher value while maintaining the remaining balance
+- **Withdrawal System**: Transfer voucher tokens to external wallets via NFT signing authority
+- **Token Transfer Records**: Complete audit trail of all token movements to/from voucher NFTs
+- **Dynamic Metadata**: Token balance and voucher worth update in NFT metadata automatically
+- **Payment Capability**: Use token vouchers directly for payments at Verxio Checkout
+
+**Real-World Use Case**: A merchant issues a 50 USDC voucher NFT to a customer. The NFT itself holds the 50 USDC tokens. The customer can redeem portions (e.g., 10 USDC at a time) or use the entire voucher for payment, all while the NFT autonomously manages the token transfers.
+
+#### Voucher Types:
+- **PERCENTAGE_OFF**: Percentage-based discounts (e.g., 10% off) stored in NFT metadata
+- **FIXED_VERXIO_CREDITS**: Fixed Verxio credit amounts embedded in the NFT
+- **FREE_ITEM**: Free product vouchers with programmable redemption conditions
+- **TOKEN**: SPL token-backed vouchers (USDC, custom tokens) - NFT holds actual tokens
+
+#### Features:
+- **Expiry Management**: Set custom expiration dates enforced on-chain
+- **Max Uses**: Configure single-use or multi-use vouchers with on-chain tracking
+- **Transferability**: Control whether vouchers can be transferred (Metaplex Core feature)
+- **Merchant Control**: Redeem, cancel, or extend voucher validity via update authority
+- **Conditions**: Add custom redemption conditions stored in NFT metadata
+- **Real Asset Backing**: Token vouchers hold actual SPL tokens within the NFT
+
 ### Loyalty Programs
 
 Create and manage comprehensive loyalty programs with Verxio Protocol's permissionless infrastructure, powered by **Metaplex Core NFTs with dynamic metadata**:
@@ -95,33 +134,6 @@ Each loyalty pass is a **Metaplex Core NFT** that serves as both a membership ca
 6. Members progress through tiers based on accumulated XP
 7. Benefits, discounts, and exclusive perks unlock at each tier level
 
-### Loyalty Vouchers
-
-Multi-type voucher system for flexible promotional campaigns, powered by **Metaplex Core NFTs** with programmable redemption logic:
-
-#### Metaplex Core NFT Vouchers
-
-Every voucher is a **Metaplex Core NFT** with dynamic metadata and programmable commerce capabilities:
-
-- **NFT Infrastructure**: Vouchers are Metaplex Core NFTs with embedded value and redemption logic
-- **Dynamic Metadata Programming**: Voucher data (value, expiry, uses) stored and updated on-chain
-- **Autonomous Wallet**: Token vouchers function as autonomous wallets holding real asset value
-- **On-chain Validation**: All voucher data and redemption rules enforced by Metaplex Core plugins
-
-#### Voucher Types:
-- **PERCENTAGE_OFF**: Percentage-based discounts (e.g., 10% off) stored in NFT metadata
-- **FIXED_VERXIO_CREDITS**: Fixed Verxio credit amounts embedded in the NFT
-- **FREE_ITEM**: Free product vouchers with programmable redemption conditions
-- **TOKEN**: SPL token-backed vouchers (USDC, custom tokens) - NFT holds actual tokens
-
-#### Features:
-- **Expiry Management**: Set custom expiration dates enforced on-chain
-- **Max Uses**: Configure single-use or multi-use vouchers with on-chain tracking
-- **Transferability**: Control whether vouchers can be transferred (Metaplex Core feature)
-- **Merchant Control**: Redeem, cancel, or extend voucher validity via update authority
-- **Conditions**: Add custom redemption conditions stored in NFT metadata
-- **Real Asset Backing**: Token vouchers hold actual SPL tokens within the NFT
-
 ### Reward Claim System
 
 Shareable reward links for distributing vouchers and incentives:
@@ -141,30 +153,6 @@ Shareable reward links for distributing vouchers and incentives:
 - Event-based giveaways
 - Loyalty program tier rewards
 
-### Token Vouchers
-
-Advanced token-backed voucher system with real asset backing, leveraging **Metaplex Core NFTs as autonomous wallets**:
-
-#### NFT-Based Asset Wallets
-
-Token vouchers are **Metaplex Core NFTs that function as autonomous wallets**, capable of holding and managing real SPL tokens:
-
-- **Autonomous Wallet Technology**: Each voucher NFT is an independent wallet that can hold tokens
-- **Real Asset Backing**: Voucher NFTs hold actual SPL tokens (USDC, BONK, custom tokens) within their account
-- **Transaction Signing**: Vouchers can sign and authorize token transfers autonomously
-- **SPL Token Support**: Works with any Solana SPL token standard
-- **On-chain Token Management**: Token balance and metadata stored directly on the NFT
-
-#### Features:
-- **Escrow Integration**: Secure token transfers to escrow or directly to voucher NFT addresses
-- **Balance Tracking**: Real-time token balance for each voucher NFT queried on-chain
-- **Partial Redemption**: Redeem portions of voucher value while maintaining the remaining balance
-- **Withdrawal System**: Transfer voucher tokens to external wallets via NFT signing authority
-- **Token Transfer Records**: Complete audit trail of all token movements to/from voucher NFTs
-- **Dynamic Metadata**: Token balance and voucher worth update in NFT metadata automatically
-- **Payment Capability**: Use token vouchers directly for payments at Verxio Checkout
-
-**Real-World Use Case**: A merchant issues a 50 USDC voucher NFT to a customer. The NFT itself holds the 50 USDC tokens. The customer can redeem portions (e.g., 10 USDC at a time) or use the entire voucher for payment, all while the NFT autonomously manages the token transfers.
 
 ### Payment & Checkout
 
