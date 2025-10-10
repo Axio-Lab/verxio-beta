@@ -1,6 +1,6 @@
 <div align="center">
   
-  **Metaplex Core-powered yield bearing prepaid loyalty cards that grows your cashflow**
+  **Metaplex Core-powered yield-bearing prepaid loyalty cards that grows your cashflow**
   
   [![Verxio Protocol](https://img.shields.io/badge/Built%20with-Verxio%20Protocol-blue)](https://github.com/verxioprotocol)
   [![Solana](https://img.shields.io/badge/Blockchain-Solana-purple)](https://solana.com)
@@ -11,6 +11,7 @@
   </div>
 
 </div>
+
 ---
 
 ## Demo
