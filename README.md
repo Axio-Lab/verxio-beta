@@ -11,6 +11,14 @@
   </div>
 
 </div>
+---
+
+## Demo
+
+> **Coming Soon**: Watch our demo video to see Verxio Checkout in action!
+
+<!-- Add your demo video here when ready -->
+<!-- [![Verxio Checkout Demo](video-thumbnail.png)](your-video-link) -->
 
 ---
 
