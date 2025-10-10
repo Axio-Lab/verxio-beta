@@ -5,6 +5,10 @@
   [![Verxio Protocol](https://img.shields.io/badge/Built%20with-Verxio%20Protocol-blue)](https://github.com/verxioprotocol)
   [![Solana](https://img.shields.io/badge/Blockchain-Solana-purple)](https://solana.com)
   [![Metaplex Core](https://img.shields.io/badge/Powered%20by-Metaplex%20Core-orange)](https://developers.metaplex.com/)
+  <div align="center">  
+    
+  [![Visit Website](https://img.shields.io/badge/🌐_Visit_Website-37a779?style=for-the-badge)](https://www.verxio.xyz)
+  </div>
 
 </div>
 
