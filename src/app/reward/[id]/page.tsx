@@ -650,7 +650,7 @@ export default function ClaimRewardPage() {
               onClick={() => login()}
               className="flex items-center gap-2 text-white hover:text-[#00adef] transition-colors text-sm px-4 py-2 border border-white/20 rounded-lg hover:border-[#00adef]/40"
             >
-              Log in to continue
+              Log in to manage
             </button>
           )}
         </div>
