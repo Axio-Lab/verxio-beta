@@ -189,17 +189,17 @@ Verxio Checkout leverages **Metaplex Core's advanced NFT infrastructure** to cre
 #### Loyalty Passes as Autonomous Wallets
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│         Metaplex Core NFT (Loyalty Pass)                │
-│                                                          │
+┌────────────────────────────────────────────────────────┐
+│         Metaplex Core NFT (Loyalty Pass)               │
+│                                                        │
 │  ┌────────────────────────────────────────────────┐    │
 │  │  NFT Metadata (Dynamic)                        │    │
-│  │  - Name: "Coffee Shop Gold Member"            │    │
+│  │  - Name: "Coffee Shop Gold Member"             │    │
 │  │  - Points: 5,420 XP                            │    │
 │  │  - Tier: Gold                                  │    │
 │  │  - Benefits: 10% discount, early access        │    │
 │  └────────────────────────────────────────────────┘    │
-│                                                          │
+│                                                        │
 │  ┌────────────────────────────────────────────────┐    │
 │  │  External Plugin (Loyalty Data)                │    │
 │  │  - current_tier: "gold"                        │    │
@@ -207,7 +207,7 @@ Verxio Checkout leverages **Metaplex Core's advanced NFT infrastructure** to cre
 │  │  - rewards: [...]                              │    │
 │  │  - last_updated: timestamp                     │    │
 │  └────────────────────────────────────────────────┘    │
-│                                                          │
+│                                                        │
 │  ┌────────────────────────────────────────────────┐    │
 │  │  Token Account (Autonomous Wallet)             │    │
 │  │  - USDC Balance: 50.00                         │    │
@@ -215,10 +215,10 @@ Verxio Checkout leverages **Metaplex Core's advanced NFT infrastructure** to cre
 │  │  - Can hold any SPL token                      │    │
 │  │  - Can make payments                           │    │
 │  └────────────────────────────────────────────────┘    │
-│                                                          │
-│  Update Authority: Merchant (can update points/tiers)   │
-│  Owner: Customer (holds NFT in their wallet)            │
-└─────────────────────────────────────────────────────────┘
+│                                                        │
+│  Update Authority: Merchant (can update points/tiers)  │
+│  Owner: Customer (holds NFT in their wallet)           │
+└────────────────────────────────────────────────────────┘
 ```
 
 #### How Autonomous Wallet Works
@@ -232,9 +232,9 @@ Verxio Checkout leverages **Metaplex Core's advanced NFT infrastructure** to cre
 #### Voucher NFTs with Token Backing
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│         Metaplex Core NFT (Token Voucher)               │
-│                                                          │
+┌────────────────────────────────────────────────────────┐
+│         Metaplex Core NFT (Token Voucher)              │
+│                                                        │
 │  ┌────────────────────────────────────────────────┐    │
 │  │  NFT Metadata                                  │    │
 │  │  - Name: "50 USDC Voucher"                     │    │
@@ -242,7 +242,7 @@ Verxio Checkout leverages **Metaplex Core's advanced NFT infrastructure** to cre
 │  │  - Value: 50 USDC                              │    │
 │  │  - Expiry: 2025-12-31                          │    │
 │  └────────────────────────────────────────────────┘    │
-│                                                          │
+│                                                        │
 │  ┌────────────────────────────────────────────────┐    │
 │  │  External Plugin (Voucher Data)                │    │
 │  │  - type: "token"                               │    │
@@ -251,16 +251,16 @@ Verxio Checkout leverages **Metaplex Core's advanced NFT infrastructure** to cre
 │  │  - expiry_date: timestamp                      │    │
 │  │  - token_address: USDC mint                    │    │
 │  └────────────────────────────────────────────────┘    │
-│                                                          │
+│                                                        │
 │  ┌────────────────────────────────────────────────┐    │
 │  │  Token Account (Holds Real USDC)               │    │
 │  │  - USDC Balance: 50.00                         │    │
-│  │  - Customer can withdraw to an external wallet    │    │
+│  │  - Customer can withdraw to an external wallet │    │
 │  │  - Can be used for payment at checkout         │    │
 │  └────────────────────────────────────────────────┘    │
-│                                                          │
-│  Owner: Customer (can redeem or transfer)               │
-└─────────────────────────────────────────────────────────┘
+│                                                        │
+│  Owner: Customer (can redeem or transfer)              │
+└────────────────────────────────────────────────────────┘
 ```
 
 Unlike traditional vouchers that are just database records, Verxio vouchers are actual on-chain assets that hold real value and can be used autonomously for commerce.
