@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
 import { ConditionalProviders } from "@/components/providers/conditional-providers";
-import { Tiles } from "@/components/layout/backgroundTiles";
+// import { Tiles } from "@/components/layout/backgroundTiles";
 import { PageLoader } from "@/components/layout/page-loader";
 
 const montserrat = Montserrat({
@@ -23,12 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${montserrat.variable} antialiased bg-black`}>
-        <Tiles
-          rows={50}
-          cols={50}
-          tileSize="md"
-        />
+      <body className={`${montserrat.variable} antialiased bg-black`} suppressHydrationWarning>
         <PageLoader />
         <div className="relative z-10">
           <ConditionalProviders>
