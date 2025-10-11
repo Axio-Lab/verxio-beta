@@ -16,10 +16,10 @@
 
 ## Demo
 
-> **Coming Soon**: Watch our demo video to see Verxio Checkout in action!
+> Watch our demo video to see Verxio's Prepaid loyalty card and stablecoin checkout in action!
 
 <!-- Add your demo video here when ready -->
-<!-- [![Verxio Checkout Demo](video-thumbnail.png)](your-video-link) -->
+[![Verxio's Demo Video](https://github.com/Axio-Lab/verxio-beta/blob/main/public/demo-video-thumbnail.png)](https://youtu.be/RpuL7h0vCZ8)
 
 ---
 
