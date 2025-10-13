@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { motion } from 'framer-motion';
-import { LogOut, AlertCircle, Gift } from 'lucide-react';
+import { LogOut, AlertCircle, Gift, Info, Copy, ExternalLink } from 'lucide-react';
 import { Tiles } from '@/components/layout/backgroundTiles';
 import { toast, ToastContainer } from 'react-toastify';
 import "react-toastify/dist/ReactToastify.css";
@@ -16,7 +16,6 @@ import { AppButton } from '@/components/ui/app-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ExternalLink } from 'lucide-react';
 import { createOrUpdateUser } from '@/app/actions/user';
 
 interface RewardDetails {
@@ -79,6 +78,19 @@ export default function ClaimRewardPage() {
   const [newExpiryDate, setNewExpiryDate] = useState('');
   const [operationSuccess, setOperationSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Yield earning states
+  const [showEarnModal, setShowEarnModal] = useState(false);
+  const [earnAmount, setEarnAmount] = useState('');
+  const [isEarning, setIsEarning] = useState(false);
+  const [earnError, setEarnError] = useState<string | null>(null);
+  const [showWithdrawEarnModal, setShowWithdrawEarnModal] = useState(false);
+  const [withdrawEarnAmount, setWithdrawEarnAmount] = useState('');
+  const [isWithdrawingEarn, setIsWithdrawingEarn] = useState(false);
+  const [earnBalance, setEarnBalance] = useState<number | null>(null);
+  const [isLoadingEarnBalance, setIsLoadingEarnBalance] = useState(false);
+  const [earnSuccess, setEarnSuccess] = useState(false);
+  const [earnSuccessMessage, setEarnSuccessMessage] = useState('');
 
   const rewardId = params.id as string;
 
@@ -287,6 +299,35 @@ export default function ClaimRewardPage() {
       fetchBalance();
     }
   }, [rewardDetails?.status, rewardDetails?.voucherAddress, voucherDetails?.attributes, voucherDetails?.voucherData?.type]);
+
+  // Fetch earn pool balance (mock function - replace with actual implementation)
+  useEffect(() => {
+    const fetchEarnBalance = async () => {
+      if (!rewardDetails?.voucherAddress || rewardDetails.status !== 'claimed' || rewardDetails.symbol !== 'USDC') {
+        setEarnBalance(null);
+        return;
+      }
+      
+      setIsLoadingEarnBalance(true);
+      try {
+        // Mock implementation - replace with actual Reflect Money API call
+        // const { getEarnBalance } = await import('@/app/actions/reflect');
+        // const result = await getEarnBalance(rewardDetails.voucherAddress);
+        // if (result.success) setEarnBalance(result.balance);
+        
+        // Mock balance for now
+        setTimeout(() => {
+          setEarnBalance(12.50); // Mock: $12.50 earning yield
+          setIsLoadingEarnBalance(false);
+        }, 1000);
+      } catch {
+        setEarnBalance(null);
+        setIsLoadingEarnBalance(false);
+      }
+    };
+
+    fetchEarnBalance();
+  }, [rewardDetails?.status, rewardDetails?.voucherAddress, rewardDetails?.symbol]);
 
   const fetchVoucherBalance = async () => {
     if (!rewardDetails?.voucherAddress || !voucherDetails?.attributes?.['Token Address']) {
@@ -531,6 +572,99 @@ export default function ClaimRewardPage() {
     }
   };
 
+  // Yield earning handlers
+  const handleEarnDeposit = async () => {
+    if (!user?.wallet?.address || !rewardDetails?.voucherAddress || !earnAmount) return;
+
+    const numAmount = parseFloat(earnAmount);
+    if (isNaN(numAmount) || numAmount <= 0) return;
+
+    setIsEarning(true);
+    setEarnError(null);
+    try {
+      // Mock implementation - replace with actual Reflect Money deposit
+      // const { depositToEarnPool } = await import('@/app/actions/reflect');
+      // const result = await depositToEarnPool({
+      //   voucherAddress: rewardDetails.voucherAddress,
+      //   amount: numAmount,
+      //   userWalletAddress: user.wallet.address,
+      // });
+
+      // Mock success
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      setEarnSuccessMessage(`Successfully deposited ${numAmount} USDC to earn pool!`);
+      setEarnSuccess(true);
+      setShowEarnModal(false);
+      setEarnAmount('');
+      
+      // Refresh balances
+      setEarnBalance(prev => (prev || 0) + numAmount);
+      
+      toast.success('Successfully deposited to earn pool!', {
+        position: "top-right",
+        autoClose: 5000,
+        theme: "dark",
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to deposit to earn pool';
+      setEarnError(errorMessage);
+      toast.error(errorMessage, {
+        position: "top-right",
+        autoClose: 5000,
+        theme: "dark",
+      });
+    } finally {
+      setIsEarning(false);
+    }
+  };
+
+  const handleEarnWithdraw = async () => {
+    if (!user?.wallet?.address || !rewardDetails?.voucherAddress || !withdrawEarnAmount) return;
+
+    const numAmount = parseFloat(withdrawEarnAmount);
+    if (isNaN(numAmount) || numAmount <= 0 || numAmount > (earnBalance || 0)) return;
+
+    setIsWithdrawingEarn(true);
+    setEarnError(null);
+    try {
+      // Mock implementation - replace with actual Reflect Money withdrawal
+      // const { withdrawFromEarnPool } = await import('@/app/actions/reflect');
+      // const result = await withdrawFromEarnPool({
+      //   voucherAddress: rewardDetails.voucherAddress,
+      //   amount: numAmount,
+      //   userWalletAddress: user.wallet.address,
+      // });
+
+      // Mock success
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      setEarnSuccessMessage(`Successfully withdrew ${numAmount} USDC from earn pool!`);
+      setEarnSuccess(true);
+      setShowWithdrawEarnModal(false);
+      setWithdrawEarnAmount('');
+      
+      // Refresh balances
+      setEarnBalance(prev => Math.max(0, (prev || 0) - numAmount));
+      
+      toast.success('Successfully withdrew from earn pool!', {
+        position: "top-right",
+        autoClose: 5000,
+        theme: "dark",
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to withdraw from earn pool';
+      setEarnError(errorMessage);
+      toast.error(errorMessage, {
+        position: "top-right",
+        autoClose: 5000,
+        theme: "dark",
+      });
+    } finally {
+      setIsWithdrawingEarn(false);
+    }
+  };
+
   const formatVoucherType = (type: string) => {
     const typeMap: { [key: string]: string } = {
       'FREE_ITEM': 'Free Item',
@@ -666,8 +800,8 @@ export default function ClaimRewardPage() {
             className="max-w-md w-full"
           >
             <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
-              {/* Countdown Banner */}
-              {rewardDetails.expiryDate && (
+              {/* Countdown Banner - Only show for unclaimed rewards */}
+              {rewardDetails.expiryDate && rewardDetails.status !== 'claimed' && (
                 <div className="mb-4">
                   <div className={`w-full text-center px-3 py-2 rounded-lg border text-sm ${
                     isExpired ? 'text-red-400 border-red-500/40 bg-red-500/10' : 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
@@ -683,7 +817,99 @@ export default function ClaimRewardPage() {
                 </div>
               )}
 
-              {/* Claimed Message - Only show for claimed rewards */}
+              {/* Voucher Address - Show for all claimed rewards at the top */}
+              {rewardDetails.status === 'claimed' && rewardDetails.voucherAddress && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between p-3 bg-black/20 border border-white/10 rounded-lg">
+                    <span className="text-white/60 text-sm">Verxio Card</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-mono text-sm">
+                        {rewardDetails.voucherAddress.slice(0, 10)}...{rewardDetails.voucherAddress.slice(-6)}
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(rewardDetails.voucherAddress || '');
+                          toast.success('Voucher address copied!', {
+                            position: "top-right",
+                            autoClose: 2000,
+                            theme: "dark",
+                          });
+                        }}
+                        className="text-white/40 hover:text-white/60 transition-colors"
+                        title="Copy voucher address"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Yield Earning Section for claimed USDC token vouchers - Move to top */}
+              {rewardDetails.status === 'claimed' && authenticated && rewardDetails.creator !== user?.wallet?.address && voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC' && voucherDetails?.owner === user?.wallet?.address && (
+                <div className="mb-6">
+                  {/* Yield Earning Banner */}
+                  <div className="p-4 bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg">
+                    {/* Header with Reflect info */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <img src="/logo/reflect.svg" alt="Reflect" className="w-6 h-6" />
+                      <div>
+                        <h4 className="text-green-400 font-semibold text-sm">Earn up to 8% APY</h4>
+                        <p className="text-white/70 text-xs">on idle deposits</p>
+                      </div>
+                      
+                    </div>
+                    
+                    <p className="text-white/60 text-xs mb-3">
+                      Deposit your USDC to the earn pool powered by Reflect Money and start earning yield automatically.
+                    </p>
+
+                    {/* Current Earn Balance */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-white/60 text-xs">Earn Pool Balance:</span>
+                      {isLoadingEarnBalance ? (
+                        <span className="text-white/40 text-xs">Loading...</span>
+                      ) : (
+                        <span className="text-green-400 font-medium text-sm">
+                          {(earnBalance || 0).toFixed(2)} USDC+
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEarnAmount('');
+                          setEarnError(null);
+                          setShowEarnModal(true);
+                        }}
+                        className="flex-1 px-3 py-2 bg-green-600/20 hover:bg-green-600/30 border border-green-600/30 rounded text-green-400 text-xs font-medium transition-colors"
+                      >
+                        Deposit to Earn
+                      </button>
+                      <button
+                        onClick={() => {
+                          setWithdrawEarnAmount('');
+                          setEarnError(null);
+                          setShowWithdrawEarnModal(true);
+                        }}
+                        disabled={!earnBalance || earnBalance <= 0}
+                        className={`flex-1 px-3 py-2 border rounded text-xs font-medium transition-colors ${
+                          !earnBalance || earnBalance <= 0
+                            ? 'bg-gray-700/30 text-gray-400 border-gray-600 cursor-not-allowed'
+                            : 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-600/30 text-blue-400'
+                        }`}
+                      >
+                        Withdraw from Earn
+                      </button>
+                      
+                    </div>
+                    
+                  </div>
+                </div>
+              )}
+
               {/* Reward Image */}
               {rewardDetails.imageUri && (
                 <div className="mb-6">
@@ -755,6 +981,16 @@ export default function ClaimRewardPage() {
                     </span>
                   </div>
 
+                  {/* Expiry Date - Only show for claimed rewards */}
+                  {rewardDetails.status === 'claimed' && rewardDetails.expiryDate && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/60 text-sm">Expires</span>
+                      <span className="text-white font-medium">
+                        {new Date(rewardDetails.expiryDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Explorer Link - Only show for claimed rewards */}
                   {rewardDetails.status === 'claimed' && rewardDetails.voucherAddress && (
                     <div className="flex justify-between items-center">
@@ -775,21 +1011,18 @@ export default function ClaimRewardPage() {
               {/* Claim Button or Status Message */}
               {rewardDetails.status === 'claimed' && rewardDetails.creator !== user?.wallet?.address ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-green-500/20 border border-green-500/40 rounded-lg text-center">
+                  {/* <div className="p-4 bg-green-500/20 border border-green-500/40 rounded-lg text-center">
                     <h3 className="text-lg font-semibold text-green-400">Reward Claimed</h3>
-                  </div>
+                  </div> */}
                   
-                  {/* Withdraw functionality for token vouchers - Show for voucher owner only */}
-                  {authenticated && rewardDetails.creator !== user?.wallet?.address && voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && voucherDetails?.owner === user?.wallet?.address ? (
+                  {/* Withdraw functionality for USDC token vouchers */}
+                  {authenticated && rewardDetails.creator !== user?.wallet?.address && voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC' && voucherDetails?.owner === user?.wallet?.address ? (
                     <div className="space-y-2">
                       {isLoadingBalance ? (
                         <div className="text-center text-xs text-white/60">Checking balance...</div>
                       ) : voucherTokenBalance !== null && voucherTokenBalance <= 0 ? (
                         <div className="space-y-2">
                           <div className="p-2 rounded border border-white/10 bg-white/5 text-white/70 text-xs text-center">Nothing to withdraw</div>
-                          {/* <AppButton onClick={() => window.location.href = '/dashboard'} className="w-full" variant="secondary">
-                            Go to Dashboard
-                          </AppButton> */}
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
@@ -815,9 +1048,6 @@ export default function ClaimRewardPage() {
                           >
                             Withdraw Tokens
                           </button>
-                          {/* <AppButton onClick={() => window.location.href = '/dashboard'} variant="secondary" className="flex-1">
-                            Go to Dashboard
-                          </AppButton> */}
                         </div>
                       )}
                     </div>
@@ -1301,6 +1531,235 @@ export default function ClaimRewardPage() {
               onClick={() => {
                 setOperationSuccess(false);
                 setSuccessMessage('');
+              }}
+              className="w-full"
+            >
+              Continue
+            </AppButton>
+          </div>
+        </div>
+      )}
+
+      {/* Earn Pool Deposit Modal */}
+      {showEarnModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <img src="/logo/reflect.svg" alt="Reflect" className="w-6 h-6" />
+                <h3 className="text-white font-semibold text-lg">Deposit to Earn Pool</h3>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Voucher Info */}
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <div className="text-green-400 text-sm font-medium mb-1">Depositing from:</div>
+                <div className="text-white text-sm">
+                  {rewardDetails.name || `Voucher`} - {voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth} USDC
+                </div>
+              </div>
+
+              {/* Amount Field */}
+              <div className="space-y-2">
+                <Label htmlFor="earn-amount" className="text-white text-sm font-medium">
+                  Amount to Deposit (USDC)
+                </Label>
+                <Input
+                  id="earn-amount"
+                  type="number"
+                  value={earnAmount}
+                  onChange={(e) => setEarnAmount(e.target.value)}
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                  max={(voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0}
+                  className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                />
+                <div className="text-xs text-white/60">
+                  Available: {((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0).toFixed(2)} USDC
+                </div>
+              </div>
+
+              {/* Yield Info */}
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <img src="/logo/reflect.svg" alt="Reflect" className="w-4 h-4" />
+                  <div className="text-blue-400 text-sm font-medium">Earn up to 8% APY</div>
+                </div>
+                <div className="text-blue-300 text-xs">
+                  Your deposited amount will start earning yield automatically through Reflect Money's yield-bearing stablecoins.
+                </div>
+              </div>
+
+              {/* Error Display */}
+              {earnError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm font-medium">{earnError}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <AppButton
+                  onClick={() => {
+                    setShowEarnModal(false);
+                    setEarnAmount('');
+                    setEarnError(null);
+                  }}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  Cancel
+                </AppButton>
+                <AppButton
+                  onClick={handleEarnDeposit}
+                  disabled={
+                    !earnAmount.trim() || 
+                    parseFloat(earnAmount) <= 0 ||
+                    parseFloat(earnAmount) > ((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0) ||
+                    isEarning
+                  }
+                  className="flex-1"
+                >
+                  {isEarning ? (
+                    <div className="flex items-center gap-2">
+                      <VerxioLoaderWhite size="sm" />
+                      Depositing...
+                    </div>
+                  ) : (
+                    'Deposit to Earn Pool'
+                  )}
+                </AppButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Earn Pool Withdraw Modal */}
+      {showWithdrawEarnModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-6 w-full max-w-md mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <img src="/logo/reflect.svg" alt="Reflect" className="w-6 h-6" />
+                <h3 className="text-white font-semibold text-lg">Withdraw from Earn Pool</h3>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Voucher Info */}
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <div className="text-blue-400 text-sm font-medium mb-1">Withdrawing from:</div>
+                <div className="text-white text-sm">
+                  {rewardDetails.name || `Voucher`} Earn Pool
+                </div>
+              </div>
+
+              {/* Current Balance */}
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-green-400 text-sm font-medium">Earn Pool Balance:</span>
+                  <span className="text-white font-medium">
+                    {(earnBalance || 0).toFixed(2)} USDC+
+                  </span>
+                </div>
+              </div>
+
+              {/* Amount Field */}
+              <div className="space-y-2">
+                <Label htmlFor="withdraw-earn-amount" className="text-white text-sm font-medium">
+                  Amount to Withdraw (USDC)
+                </Label>
+                <Input
+                  id="withdraw-earn-amount"
+                  type="number"
+                  value={withdrawEarnAmount}
+                  onChange={(e) => setWithdrawEarnAmount(e.target.value)}
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                  max={earnBalance || 0}
+                  className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
+                />
+                <div className="text-xs text-white/60">
+                  Available: {(earnBalance || 0).toFixed(2)} USDC
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                <div className="text-orange-400 text-sm font-medium mb-1">Note</div>
+                <div className="text-orange-300 text-xs">
+                  Withdrawing from the earn pool will stop earning yield on the withdrawn amount.
+                </div>
+              </div>
+
+              {/* Error Display */}
+              {earnError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm font-medium">{earnError}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <AppButton
+                  onClick={() => {
+                    setShowWithdrawEarnModal(false);
+                    setWithdrawEarnAmount('');
+                    setEarnError(null);
+                  }}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  Cancel
+                </AppButton>
+                <AppButton
+                  onClick={handleEarnWithdraw}
+                  disabled={
+                    !withdrawEarnAmount.trim() || 
+                    parseFloat(withdrawEarnAmount) <= 0 ||
+                    parseFloat(withdrawEarnAmount) > (earnBalance || 0) ||
+                    isWithdrawingEarn
+                  }
+                  className="flex-1"
+                >
+                  {isWithdrawingEarn ? (
+                    <div className="flex items-center gap-2">
+                      <VerxioLoaderWhite size="sm" />
+                      Withdrawing...
+                    </div>
+                  ) : (
+                    'Withdraw from Earn Pool'
+                  )}
+                </AppButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Earn Success Modal */}
+      {earnSuccess && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/90 border border-white/20 rounded-lg p-8 w-full max-w-md mx-auto text-center">
+            <div className="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <img src="/logo/reflect.svg" alt="Reflect" className="w-8 h-8" />
+            </div>
+            <h3 className="text-white font-semibold text-xl mb-2">Success!</h3>
+            <p className="text-white/80 mb-6">{earnSuccessMessage}</p>
+            <AppButton
+              onClick={() => {
+                setEarnSuccess(false);
+                setEarnSuccessMessage('');
               }}
               className="w-full"
             >
