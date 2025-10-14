@@ -47,7 +47,7 @@ Every loyalty card and voucher is a functional blockchain asset that:
 
 ## What is Verxio Protocol?
 
-Open-source, permissionless onchain loyalty infrastructure built on Metaplex Core NFTs.
+The first Open-source, permissionless onchain loyalty infrastructure built on Metaplex Core NFTs.
 
 **Core Innovation**: Dynamic metadata programming + autonomous wallet technology = loyalty assets that function as commerce primitives, not just collectibles.
 
