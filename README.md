@@ -16,7 +16,7 @@
 
 ## Demo
 
-> Watch our demo video to see Verxio's Prepaid loyalty card and stablecoin checkout in action!
+> Watch our demo video to see Verxio's yield bearing prepaid loyalty card and stablecoin checkout in action!
 
 <!-- Add your demo video here when ready -->
 [![Verxio's Demo Video](https://github.com/Axio-Lab/verxio-beta/blob/main/public/demo-video-thumbnail.png)](https://youtu.be/RpuL7h0vCZ8)
