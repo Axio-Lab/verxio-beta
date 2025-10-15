@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { motion } from 'framer-motion';
-import { LogOut, AlertCircle, Gift, Info, Copy, ExternalLink } from 'lucide-react';
+import { LogOut, AlertCircle, Gift, Copy, ExternalLink } from 'lucide-react';
 import { Tiles } from '@/components/layout/backgroundTiles';
 import { toast, ToastContainer } from 'react-toastify';
 import "react-toastify/dist/ReactToastify.css";
@@ -582,38 +582,32 @@ export default function ClaimRewardPage() {
     setIsEarning(true);
     setEarnError(null);
     try {
-      // Mock implementation - replace with actual Reflect Money deposit
-      // const { depositToEarnPool } = await import('@/app/actions/reflect');
-      // const result = await depositToEarnPool({
-      //   voucherAddress: rewardDetails.voucherAddress,
-      //   amount: numAmount,
-      //   userWalletAddress: user.wallet.address,
-      // });
+      const res = await fetch('/api/reflect/deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voucherAddress: rewardDetails.voucherAddress, amountUsdc: numAmount }),
+      })
+      const result = await res.json()
 
-      // Mock success
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setEarnSuccessMessage(`Successfully deposited ${numAmount} USDC to earn pool!`);
+      if (!result.success) throw new Error(result.error);
+
+      setEarnSuccessMessage(`Deposited ${numAmount.toFixed(2)} USDC • ${result.signature.slice(0, 8)}...`);
       setEarnSuccess(true);
       setShowEarnModal(false);
       setEarnAmount('');
-      
-      // Refresh balances
+
+      // Refresh balances (optimistic)
       setEarnBalance(prev => (prev || 0) + numAmount);
-      
-      toast.success('Successfully deposited to earn pool!', {
-        position: "top-right",
-        autoClose: 5000,
-        theme: "dark",
-      });
+      if (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC') {
+        // Decrease available USDC balance optimistically
+        setVoucherTokenBalance(prev => (prev || 0) - numAmount);
+      }
+
+      toast.success('Deposited to earn pool', { position: 'top-right', autoClose: 4000, theme: 'dark' });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to deposit to earn pool';
       setEarnError(errorMessage);
-      toast.error(errorMessage, {
-        position: "top-right",
-        autoClose: 5000,
-        theme: "dark",
-      });
+      toast.error(errorMessage, { position: 'top-right', autoClose: 5000, theme: 'dark' });
     } finally {
       setIsEarning(false);
     }
@@ -628,38 +622,32 @@ export default function ClaimRewardPage() {
     setIsWithdrawingEarn(true);
     setEarnError(null);
     try {
-      // Mock implementation - replace with actual Reflect Money withdrawal
-      // const { withdrawFromEarnPool } = await import('@/app/actions/reflect');
-      // const result = await withdrawFromEarnPool({
-      //   voucherAddress: rewardDetails.voucherAddress,
-      //   amount: numAmount,
-      //   userWalletAddress: user.wallet.address,
-      // });
+      const res = await fetch('/api/reflect/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voucherAddress: rewardDetails.voucherAddress, amountUsdcPlus: numAmount }),
+      })
+      const result = await res.json()
 
-      // Mock success
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setEarnSuccessMessage(`Successfully withdrew ${numAmount} USDC from earn pool!`);
+      if (!result.success) throw new Error(result.error);
+
+      setEarnSuccessMessage(`Withdrew ${numAmount.toFixed(2)} USDC from earn • ${result.signature.slice(0, 8)}...`);
       setEarnSuccess(true);
       setShowWithdrawEarnModal(false);
       setWithdrawEarnAmount('');
-      
-      // Refresh balances
+
+      // Refresh balances (optimistic)
       setEarnBalance(prev => Math.max(0, (prev || 0) - numAmount));
-      
-      toast.success('Successfully withdrew from earn pool!', {
-        position: "top-right",
-        autoClose: 5000,
-        theme: "dark",
-      });
+      if (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC') {
+        // Increase available USDC balance optimistically
+        setVoucherTokenBalance(prev => (prev || 0) + numAmount);
+      }
+
+      toast.success('Withdrew from earn pool', { position: 'top-right', autoClose: 4000, theme: 'dark' });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to withdraw from earn pool';
       setEarnError(errorMessage);
-      toast.error(errorMessage, {
-        position: "top-right",
-        autoClose: 5000,
-        theme: "dark",
-      });
+      toast.error(errorMessage, { position: 'top-right', autoClose: 5000, theme: 'dark' });
     } finally {
       setIsWithdrawingEarn(false);
     }
@@ -861,7 +849,7 @@ export default function ClaimRewardPage() {
                     </div>
                     
                     <p className="text-white/60 text-xs mb-3">
-                      Deposit your USDC to the earn pool powered by Reflect Money and start earning yield automatically.
+                      Deposit your USDC to the earn pool powered by Reflect and start earning yield automatically.
                     </p>
 
                     {/* Current Earn Balance */}
@@ -936,7 +924,9 @@ export default function ClaimRewardPage() {
                     <div className="flex justify-between items-center">
                       <span className="text-white/60 text-sm">Voucher Worth</span>
                       <span className="text-white font-medium">
-                        {(voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth).toLocaleString()} {rewardDetails.symbol || 'USD'}
+                        {voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC'
+                          ? (isLoadingBalance ? 'Loading...' : `${(voucherTokenBalance ?? 0).toFixed(2)} USDC`)
+                          : `${(voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth).toLocaleString()} ${rewardDetails.symbol || 'USDC'}`}
                       </span>
                     </div>
                   )}
@@ -1556,7 +1546,11 @@ export default function ClaimRewardPage() {
               <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                 <div className="text-green-400 text-sm font-medium mb-1">Depositing from:</div>
                 <div className="text-white text-sm">
-                  {rewardDetails.name || `Voucher`} - {voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth} USDC
+                  {rewardDetails.name || `Voucher`} - {
+                    (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC')
+                      ? (isLoadingBalance ? 'Loading...' : `${(voucherTokenBalance ?? 0).toFixed(2)} USDC`)
+                      : `${Number(((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) ?? 0)).toFixed(2)} USDC`
+                  }
                 </div>
               </div>
 
@@ -1573,11 +1567,17 @@ export default function ClaimRewardPage() {
                   placeholder="0.00"
                   step="0.01"
                   min="0"
-                  max={(voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0}
+                  max={
+                    (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC')
+                      ? (voucherTokenBalance || 0)
+                      : ((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0)
+                  }
                   className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                 />
                 <div className="text-xs text-white/60">
-                  Available: {((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0).toFixed(2)} USDC
+                  {voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC'
+                    ? (isLoadingBalance ? 'Available: Loading...' : `Available: ${(voucherTokenBalance || 0).toFixed(2)} USDC`)
+                    : `Available: ${(((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0).toFixed(2))} USDC`}
                 </div>
               </div>
 
@@ -1620,7 +1620,11 @@ export default function ClaimRewardPage() {
                   disabled={
                     !earnAmount.trim() || 
                     parseFloat(earnAmount) <= 0 ||
-                    parseFloat(earnAmount) > ((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0) ||
+                    (
+                      (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC')
+                        ? (voucherTokenBalance !== null && parseFloat(earnAmount) > (voucherTokenBalance || 0))
+                        : (parseFloat(earnAmount) > (((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0)))
+                    ) ||
                     isEarning
                   }
                   className="flex-1"
