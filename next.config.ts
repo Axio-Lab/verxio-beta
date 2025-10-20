@@ -2,10 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
-  serverExternalPackages: [
-    "rpc-websockets",
-    "jito-ts",
-  ],
   experimental: {
     serverActions: { bodySizeLimit: "2mb" },
   },
@@ -15,9 +11,6 @@ const nextConfig: NextConfig = {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       "@solana-program/token": require('path').join(__dirname, 'src/shims/solana-program-token.ts'),
-      // Fix rpc-websockets path resolution for jito-ts and nested dependencies
-      "rpc-websockets/dist/lib/client": "rpc-websockets",
-      "rpc-websockets/dist/lib/client/websocket": "rpc-websockets",
       // Additional aliases for nested web3.js imports
       "jito-ts/node_modules/@solana/web3.js": "@solana/web3.js",
       "jito-ts/node_modules/@solana/spl-token": "@solana/spl-token",
@@ -33,8 +26,6 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     resolveAlias: {
-      "rpc-websockets/dist/lib/client": "rpc-websockets",
-      "rpc-websockets/dist/lib/client/websocket": "rpc-websockets",
       // Additional aliases for nested web3.js imports
       "jito-ts/node_modules/@solana/web3.js": "@solana/web3.js",
       "jito-ts/node_modules/@solana/spl-token": "@solana/spl-token",
