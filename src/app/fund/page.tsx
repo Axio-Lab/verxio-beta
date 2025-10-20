@@ -11,9 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { toast, ToastContainer } from 'react-toastify';
 import { usePrivy } from '@privy-io/react-auth';
-import { createFundingOrder, validateSolanaWalletAddress, observeOrder, getExchangeRate, type CreateFundingOrderData, type OrderUpdate } from '@/app/actions/fund';
 import { getUserStats } from '@/app/actions/stats';
-import { initiateSession, verifySession, checkSessionStatus, getDeviceInfo } from '@/app/actions/paj-session';
 import { Spinner } from '@/components/ui/spinner';
 import 'react-toastify/dist/ReactToastify.css';
 
