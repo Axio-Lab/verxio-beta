@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       "@solana-program/token": require('path').join(__dirname, 'src/shims/solana-program-token.ts'),
+      // Fix rpc-websockets path resolution for jito-ts and nested dependencies
+      "rpc-websockets/dist/lib/client": "rpc-websockets",
+      "rpc-websockets/dist/lib/client/websocket": "rpc-websockets",
       // Keep nested SDKs pinned to the top-level copies to avoid duplication issues
       "@drift-labs/sdk/node_modules/@solana/web3.js": "@solana/web3.js",
       "@drift-labs/sdk/node_modules/@solana/spl-token": "@solana/spl-token",
@@ -23,8 +26,8 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     resolveAlias: {
-      "rpc-websockets/dist/lib/client": "rpc-websockets/dist/index.js",
-      "rpc-websockets/dist/lib/client/websocket": "rpc-websockets/dist/index.js",
+      "rpc-websockets/dist/lib/client": "rpc-websockets",
+      "rpc-websockets/dist/lib/client/websocket": "rpc-websockets",
       "@solana-program/token": "./src/shims/solana-program-token.ts",
       "@drift-labs/sdk/node_modules/@solana/web3.js": "@solana/web3.js",
       "@drift-labs/sdk/node_modules/@solana/spl-token": "@solana/spl-token",
