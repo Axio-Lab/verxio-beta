@@ -2,10 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
-  serverExternalPackages: [
-    "rpc-websockets",
-    "jito-ts",
-  ],
   experimental: {
     serverActions: { bodySizeLimit: "2mb" },
   },
