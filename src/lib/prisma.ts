@@ -7,9 +7,11 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 // Prefer DIRECT_DATABASE_URL at runtime to bypass Accelerate for application queries
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  datasourceUrl: process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL,
-}).$extends(
+// export const prisma = globalForPrisma.prisma ?? new PrismaClient({
+//   datasourceUrl: process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL,
+// }).$extends(
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient().$extends(
   fieldEncryptionExtension({
     encryptionKey: process.env.PRISMA_FIELD_ENCRYPTION_KEY!,
   })
@@ -19,5 +21,6 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient({
 
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma 
+ globalForPrisma.prisma = prisma 
 
 // export default prisma
