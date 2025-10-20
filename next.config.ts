@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
+  serverExternalPackages: [
+    "rpc-websockets",
+    "jito-ts",
+  ],
   experimental: {
     serverActions: { bodySizeLimit: "2mb" },
   },
@@ -14,6 +18,9 @@ const nextConfig: NextConfig = {
       // Fix rpc-websockets path resolution for jito-ts and nested dependencies
       "rpc-websockets/dist/lib/client": "rpc-websockets",
       "rpc-websockets/dist/lib/client/websocket": "rpc-websockets",
+      // Additional aliases for nested web3.js imports
+      "jito-ts/node_modules/@solana/web3.js": "@solana/web3.js",
+      "jito-ts/node_modules/@solana/spl-token": "@solana/spl-token",
       // Keep nested SDKs pinned to the top-level copies to avoid duplication issues
       "@drift-labs/sdk/node_modules/@solana/web3.js": "@solana/web3.js",
       "@drift-labs/sdk/node_modules/@solana/spl-token": "@solana/spl-token",
@@ -28,6 +35,9 @@ const nextConfig: NextConfig = {
     resolveAlias: {
       "rpc-websockets/dist/lib/client": "rpc-websockets",
       "rpc-websockets/dist/lib/client/websocket": "rpc-websockets",
+      // Additional aliases for nested web3.js imports
+      "jito-ts/node_modules/@solana/web3.js": "@solana/web3.js",
+      "jito-ts/node_modules/@solana/spl-token": "@solana/spl-token",
       "@solana-program/token": "./src/shims/solana-program-token.ts",
       "@drift-labs/sdk/node_modules/@solana/web3.js": "@solana/web3.js",
       "@drift-labs/sdk/node_modules/@solana/spl-token": "@solana/spl-token",
