@@ -6,7 +6,15 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "2mb" },
   },
   // Ensure webpack builds (e.g., in Docker/Railway) resolve Solana program aliases
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // For server-side builds (Railway), externalize these packages
+      config.externals = config.externals || [];
+      config.externals.push({
+        'rpc-websockets': 'commonjs rpc-websockets',
+        'jito-ts': 'commonjs jito-ts',
+      });
+    } 
     config.resolve = config.resolve || {};
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
