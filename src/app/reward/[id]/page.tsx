@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { motion } from 'framer-motion';
@@ -88,6 +88,7 @@ export default function ClaimRewardPage() {
   const [withdrawEarnAmount, setWithdrawEarnAmount] = useState('');
   const [isWithdrawingEarn, setIsWithdrawingEarn] = useState(false);
   const [earnBalance, setEarnBalance] = useState<number | null>(null);
+  const USDC_PLUS_MINT = 'usd63SVWcKqLeyNHpmVhZGYAqfE5RHE8jwqjRA2ida2';
   const [isLoadingEarnBalance, setIsLoadingEarnBalance] = useState(false);
   const [earnSuccess, setEarnSuccess] = useState(false);
   const [earnSuccessMessage, setEarnSuccessMessage] = useState('');
@@ -300,34 +301,35 @@ export default function ClaimRewardPage() {
     }
   }, [rewardDetails?.status, rewardDetails?.voucherAddress, voucherDetails?.attributes, voucherDetails?.voucherData?.type]);
 
-  // Fetch earn pool balance (mock function - replace with actual implementation)
-  useEffect(() => {
-    const fetchEarnBalance = async () => {
-      if (!rewardDetails?.voucherAddress || rewardDetails.status !== 'claimed' || rewardDetails.symbol !== 'USDC') {
-        setEarnBalance(null);
-        return;
+  // Fetch real USDC+ balance for the voucher owner
+  const fetchEarnBalance = useCallback(async () => {
+    if (!rewardDetails?.voucherAddress || rewardDetails.status !== 'claimed') {
+      setEarnBalance(null);
+      return;
+    }
+    setIsLoadingEarnBalance(true);
+    try {
+      const res = await fetch('/api/token/balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner: rewardDetails.voucherAddress, mint: USDC_PLUS_MINT })
+      })
+      const json = await res.json()
+      if (json.success) {
+        setEarnBalance(json.balance)
+      } else {
+        setEarnBalance(null)
       }
-      
-      setIsLoadingEarnBalance(true);
-      try {
-        // Mock implementation - replace with actual Reflect Money API call
-        // const { getEarnBalance } = await import('@/app/actions/reflect');
-        // const result = await getEarnBalance(rewardDetails.voucherAddress);
-        // if (result.success) setEarnBalance(result.balance);
-        
-        // Mock balance for now
-        setTimeout(() => {
-          setEarnBalance(12.50); // Mock: $12.50 earning yield
-          setIsLoadingEarnBalance(false);
-        }, 1000);
-      } catch {
-        setEarnBalance(null);
-        setIsLoadingEarnBalance(false);
-      }
-    };
+    } catch {
+      setEarnBalance(null)
+    } finally {
+      setIsLoadingEarnBalance(false)
+    }
+  }, [rewardDetails?.voucherAddress, rewardDetails?.status])
 
-    fetchEarnBalance();
-  }, [rewardDetails?.status, rewardDetails?.voucherAddress, rewardDetails?.symbol]);
+  useEffect(() => {
+    fetchEarnBalance()
+  }, [fetchEarnBalance])
 
   const fetchVoucherBalance = async () => {
     if (!rewardDetails?.voucherAddress || !voucherDetails?.attributes?.['Token Address']) {
@@ -596,8 +598,8 @@ export default function ClaimRewardPage() {
       setShowEarnModal(false);
       setEarnAmount('');
 
-      // Refresh balances (optimistic)
-      setEarnBalance(prev => (prev || 0) + numAmount);
+      // Refresh earn pool balance to reflect actual on-chain value
+      await fetchEarnBalance();
       if (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC') {
         // Decrease available USDC balance optimistically
         setVoucherTokenBalance(prev => (prev || 0) - numAmount);
@@ -636,8 +638,8 @@ export default function ClaimRewardPage() {
       setShowWithdrawEarnModal(false);
       setWithdrawEarnAmount('');
 
-      // Refresh balances (optimistic)
-      setEarnBalance(prev => Math.max(0, (prev || 0) - numAmount));
+      // Refresh earn pool balance to reflect actual on-chain value
+      await fetchEarnBalance();
       if (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC') {
         // Increase available USDC balance optimistically
         setVoucherTokenBalance(prev => (prev || 0) + numAmount);
@@ -859,7 +861,7 @@ export default function ClaimRewardPage() {
                         <span className="text-white/40 text-xs">Loading...</span>
                       ) : (
                         <span className="text-green-400 font-medium text-sm">
-                          {(earnBalance || 0).toFixed(2)} USDC+
+                          {isLoadingEarnBalance ? 'Loading...' : `${(earnBalance || 0).toFixed(2)} USDC+`}
                         </span>
                       )}
                     </div>
@@ -1674,10 +1676,10 @@ export default function ClaimRewardPage() {
                 </div>
               </div>
 
-              {/* Amount Field */}
+              {/* Amount Field (USDC+) */}
               <div className="space-y-2">
                 <Label htmlFor="withdraw-earn-amount" className="text-white text-sm font-medium">
-                  Amount to Withdraw (USDC)
+                  Amount to Withdraw (USDC+)
                 </Label>
                 <Input
                   id="withdraw-earn-amount"
@@ -1690,9 +1692,6 @@ export default function ClaimRewardPage() {
                   max={earnBalance || 0}
                   className="bg-black/20 border-white/20 text-white placeholder:text-white/40 text-sm"
                 />
-                <div className="text-xs text-white/60">
-                  Available: {(earnBalance || 0).toFixed(2)} USDC
-                </div>
               </div>
 
               {/* Warning */}
