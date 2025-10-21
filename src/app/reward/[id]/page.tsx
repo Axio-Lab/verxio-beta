@@ -1627,7 +1627,8 @@ export default function ClaimRewardPage() {
                         ? (voucherTokenBalance !== null && parseFloat(earnAmount) > (voucherTokenBalance || 0))
                         : (parseFloat(earnAmount) > (((voucherDetails?.voucherData?.remainingWorth ?? rewardDetails.voucherWorth) || 0)))
                     ) ||
-                    isEarning
+                    isEarning ||
+                    (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC' && voucherTokenBalance === 0)
                   }
                   className="flex-1"
                 >
@@ -1636,6 +1637,8 @@ export default function ClaimRewardPage() {
                       <VerxioLoaderWhite size="sm" />
                       Depositing...
                     </div>
+                  ) : (voucherDetails?.voucherData?.type?.toLowerCase() === 'token' && rewardDetails.symbol === 'USDC' && voucherTokenBalance === 0) ? (
+                    'No Balance Available'
                   ) : (
                     'Deposit to Earn Pool'
                   )}
@@ -1731,7 +1734,8 @@ export default function ClaimRewardPage() {
                     !withdrawEarnAmount.trim() || 
                     parseFloat(withdrawEarnAmount) <= 0 ||
                     parseFloat(withdrawEarnAmount) > (earnBalance || 0) ||
-                    isWithdrawingEarn
+                    isWithdrawingEarn ||
+                    (earnBalance === 0)
                   }
                   className="flex-1"
                 >
@@ -1740,6 +1744,8 @@ export default function ClaimRewardPage() {
                       <VerxioLoaderWhite size="sm" />
                       Withdrawing...
                     </div>
+                  ) : (earnBalance === 0) ? (
+                    'No Balance Available'
                   ) : (
                     'Withdraw from Earn Pool'
                   )}
