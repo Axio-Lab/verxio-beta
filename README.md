@@ -156,7 +156,7 @@ Solana Pay integration with NFT-powered payment capabilities.
 3. Customer receives NFT → Can withdraw, redeem, or pay with it
 4. Customer earns yield on $50 balance → Reflect Money integration
 4. Customer spends 30 USDC from loyalty card at checkout → Autonomous wallet signs transaction 
-5. Custoemr has 20 USDC balance still earning yield from Reflect Money
+5. Customer has 20 USDC balance still earning yield from Reflect Money
 5. All transactions on-chain → Zero trust, full transparency
 ```
 
