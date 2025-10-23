@@ -362,7 +362,7 @@ const Page = () => {
         const amountFromWallet = finalAmount - amountFromVoucher;
 
         // Process voucher withdrawal to merchant
-        setPaymentStep(`Withdrawing ${amountFromVoucher.toFixed(2)} USDC from voucher...`);
+        setPaymentStep(`Withdrawing ${amountFromVoucher.toFixed(2)} USDC from card...`);
         const voucherPaymentResult = await payWithVoucher(
           selectedVoucher,
           amountFromVoucher,
@@ -745,7 +745,7 @@ const Page = () => {
         if (parseFloat(userBalance) < (remainingAmount + fee)) {
           return 'Insufficient Balance';
         }
-        return `Pay (${voucherBalance.toFixed(2)} from voucher)`;
+        return `Pay (${voucherBalance.toFixed(2)} USDC from loyalty card)`;
       }
       return `Pay with your loyalty card (${voucherBalance.toFixed(2)} USDC)`;
     }
@@ -1243,7 +1243,7 @@ const Page = () => {
                   <div className="mt-3">
                     <Select value={selectedVoucher} onValueChange={setSelectedVoucher}>
                       <SelectTrigger className="bg-black/20 border-white/20 text-white h-12 w-full">
-                        <SelectValue placeholder="Select a voucher..." />
+                        <SelectValue placeholder="Select loyalty card..." />
                       </SelectTrigger>
                       <SelectContent className="bg-[#1a1a1a] border-white/20 text-white">
                         {userVouchers.map((voucher) => (

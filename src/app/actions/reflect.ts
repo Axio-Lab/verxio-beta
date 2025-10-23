@@ -66,7 +66,8 @@ export async function depositToEarnPool(params: { voucherAddress: string; amount
     }).compileToV0Message(lookupTable ? [lookupTable] : [])
 
     const transaction = new VersionedTransaction(message)
-    transaction.sign([feePayerWallet]) // Sign with fee payer
+    // Sign with both keypairs: user first (for token transfer), then fee payer (for transaction fees)
+    transaction.sign([userKeypair, feePayerWallet])
 
     const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false })
     return { success: true, signature }
@@ -114,7 +115,8 @@ export async function withdrawFromEarnPool(params: { voucherAddress: string; amo
     }).compileToV0Message(lookupTable ? [lookupTable] : [])
 
     const transaction = new VersionedTransaction(message)
-    transaction.sign([feePayerWallet]) // Sign with fee payer
+    // Sign with both keypairs: user first (for token transfer), then fee payer (for transaction fees)
+    transaction.sign([userKeypair, feePayerWallet])
 
     const signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: false })
     return { success: true, signature }
