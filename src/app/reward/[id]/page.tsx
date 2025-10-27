@@ -367,6 +367,16 @@ export default function ClaimRewardPage() {
         // reflect claimed state immediately to trigger the claimed view
         setRewardDetails(prev => prev ? { ...prev, status: 'claimed', voucherAddress: (result as any).voucherAddress } as any : prev);
         setShowSplash(true); // Play celebration video
+        
+        // Refresh reward details to get updated voucher information
+        // Add a small delay to ensure backend has processed the claim
+        setTimeout(async () => {
+          const refreshResult = await getRewardLink(rewardId);
+          if (refreshResult.success && refreshResult.reward) {
+            setRewardDetails(refreshResult.reward as RewardDetails);
+          }
+        }, 1000);
+        
         toast.success('Reward claimed successfully!', {
           position: "top-right",
           autoClose: 5000,
