@@ -1,6 +1,6 @@
 <div align="center">
   
-  **Metaplex Core-powered yield-bearing prepaid loyalty cards that grow your cashflow**
+  **Yield-bearing prepaid loyalty cards that grow your cashflow**
   
   [![Verxio Protocol](https://img.shields.io/badge/Built%20with-Verxio%20Protocol-blue)](https://github.com/verxioprotocol)
   [![Solana](https://img.shields.io/badge/Blockchain-Solana-purple)](https://solana.com)
@@ -16,7 +16,7 @@
 
 ## Demo
 
-> Watch our demo video to see Verxio's yield bearing prepaid loyalty card and stablecoin checkout in action!
+> Watch our demo video to see Verxio's yield-bearing prepaid loyalty card and stablecoin checkout in action!
 
 <!-- Add your demo video here when ready -->
 [![Verxio's Demo Video](https://github.com/Axio-Lab/verxio-beta/blob/main/public/demo-video-thumbnail.png)](https://youtu.be/RpuL7h0vCZ8)
