@@ -14,12 +14,21 @@
 
 ---
 
-## Demo
+## Pitch
 
-> Watch our demo video to see Verxio's yield-bearing prepaid loyalty card and stablecoin checkout in action!
+> Watch our Pitch to see Verxio's yield-bearing prepaid loyalty card and stablecoin checkout in action!
 
 <!-- Add your demo video here when ready -->
-[![Verxio's Demo Video](https://github.com/Axio-Lab/verxio-beta/blob/main/public/demo-video-thumbnail.png)](https://youtu.be/RpuL7h0vCZ8)
+[![Verxio's Demo Video](https://github.com/Axio-Lab/verxio-beta/blob/main/public/demo-video-thumbnail.png)](https://youtu.be/sIIzAjwKdmk)
+
+---
+
+## Demo
+
+> Watch our demo video to see Verxio's open-source permissionless loyalty infrastructure in action!
+
+<!-- Add your demo video here when ready -->
+[![Verxio's Demo Video](https://img.youtube.com/vi/nRKoEZBJXgU/0.jpg)](https://youtu.be/nRKoEZBJXgU)
 
 ---
 
@@ -27,7 +36,7 @@
 
 Traditional loyalty programs fail merchants and customers:
 - **Merchants**: Points are liabilities on balance sheets, not assets
-- **Customers**: Points locked in closed ecosystems, can't be transferred or used flexibly
+- **Customers**: Points locked in closed ecosystems can't be transferred or used flexibly
 - **Both**: No cashflow benefit, complex redemption, zero interoperability
 
 ## The Solution
@@ -41,7 +50,7 @@ Every loyalty card and voucher is a functional blockchain asset that:
 - Updates loyalty data on-chain in real-time
 - Works across any Solana application
 
-**The outcome?** Merchants get pre-revenue cashflow from prepaid balances. Customers earn yield while they hold value, spend flexibly, and own their assets.
+**The outcome?**Merchants receive pre-revenue cash flow from prepaid balances. **Customers earn yield while holding value, spending flexibly, and owning their assets. **
 
 ---
 
