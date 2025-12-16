@@ -216,53 +216,17 @@ This architecture enables **prepaid loyalty cards** where NFTs are both membersh
 Verxio loyalty cards integrate with **Reflect Money** to make prepaid balances productive assets:
 
 **For Merchants:**
-- Get pre-revenue cashflow when customers load prepaid balances
+- Get pre-revenue cash flow when customers load prepaid balances
 - Convert future spend into immediate working capital
-- No liability on balance sheet (customer owns the funds)
+- No liability onthe  balance sheet (customer owns the funds)
 
 **For Customers:**
 - Load $50 USDC → earn yield on the full balance while it sits in the loyalty card
-- Spend flexibly while continuing to earn on remaining balance
+- Spend flexibly while continuing to earn on the remaining balance
 - Earn dual rewards: yield on balance + loyalty points on spending
 - Withdraw anytime (non-custodial)
 
 **Example**: Customer loads $50 → merchant receives $50 immediately → customer earns ~5% APY on balance + 2% back in loyalty points on every purchase.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and npm
-- PostgreSQL database
-- Solana wallet (devnet/mainnet SOL)
-- Helius API key
-- Privy account (authentication)
-- Pinata account (IPFS metadata storage)
-
-### Installation
-
-```bash
-# Clone repository
-git clone https://github.com/Axio-Lab/verxio-beta/
-cd verxio-beta
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-# Create .env.local file (see env.example)
-
-# Set up database
-npx prisma generate
-npx prisma migrate deploy
-
-# Run development server
-npm run dev
-```
-
-Navigate to [http://localhost:3000](http://localhost:3000)
 
 ---
 
