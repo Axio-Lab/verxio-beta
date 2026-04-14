@@ -83,7 +83,7 @@ The first Open-source, permissionless onchain loyalty infrastructure built on Me
 - **Earn yield on prepaid balance** (Reflect Money integration)
 - Non-custodial ownership of both the NFT and loaded funds
 - Tier-based discounts and perks that unlock automatically
-- Transferable, composable loyalty asset
+- Transferable, composable loyalty asset.
 
 **The prepaid model**: Customer loads $50 USDC → merchant gets pre-revenue cashflow → customer earns yield on $50 balance + loyalty points on every spend.
 
