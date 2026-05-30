@@ -25,7 +25,7 @@
 
 ## Demo
 
-> Watch our demo video to see Verxio's open-source permissionless loyalty infrastructure in action!
+> Watch our demo video to see Verxio's open-source permissionless loyalty infrastructure in action
 
 <!-- Add your demo video here when ready -->
 [![Verxio's Demo Video](https://img.youtube.com/vi/nRKoEZBJXgU/0.jpg)](https://youtu.be/nRKoEZBJXgU)
