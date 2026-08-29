@@ -210,12 +210,3 @@ Verxio loyalty cards integrate with **Reflect Money** to make prepaid balances p
 
 **Example**: Customer loads $50 → merchant receives $50 immediately → customer earns ~5% APY on balance + 2% back in loyalty points on every purchase.
 
----
-
-<div align="center">
-  
-**Built with ❤️ by the Verxio Team**
-  
-[Website](https://www.verxio.xyz) • [GitHub](https://github.com/Axio-Lab/verxio-beta) • [Twitter](https://twitter.com/verxioprotocol)
-
-</div>
