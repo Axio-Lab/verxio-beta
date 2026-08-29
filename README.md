@@ -192,21 +192,3 @@ Owner: Customer (holds NFT, controls funds, earns yield)
 - **Transaction Signing**: NFTs authorize payments autonomously
 
 This architecture enables **prepaid loyalty cards** where NFTs are both membership and payment method.
-
-### Yield-Bearing Loyalty Assets
-
-Verxio loyalty cards integrate with **Reflect Money** to make prepaid balances productive assets:
-
-**For Merchants:**
-- Get pre-revenue cash flow when customers load prepaid balances
-- Convert future spend into immediate working capital
-- No liability onthe  balance sheet (customer owns the funds)
-
-**For Customers:**
-- Load $50 USDC → earn yield on the full balance while it sits in the loyalty card
-- Spend flexibly while continuing to earn on the remaining balance
-- Earn dual rewards: yield on balance + loyalty points on spending
-- Withdraw anytime (non-custodial)
-
-**Example**: Customer loads $50 → merchant receives $50 immediately → customer earns ~5% APY on balance + 2% back in loyalty points on every purchase.
-
